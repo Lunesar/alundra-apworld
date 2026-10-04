@@ -1,0 +1,1216 @@
+[
+    {
+        "fromId": "inoa",
+        "toId": "naomi_shop",
+        "twoWay": true
+    },
+    {
+        "fromId": "inoa",
+        "toId": "inoa_jess_chest",
+        "twoWay": true,
+        "requiredItems": [
+            "Small Key"
+        ]
+    },
+    {
+        "fromId": "inoa",
+        "toId": "overworld_c4",
+        "twoWay": true
+    },
+    {
+        "fromId": "inoa",
+        "toId": "overworld_c2",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_c2",
+        "toId": "overworld_d2",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_c2",
+        "toId": "overworld_c1",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_c2",
+        "toId": "overworld_b2",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_c2",
+        "toId": "lars_crypt",
+        "twoWay": true,
+        "requiredItems": [
+            "Bouquet"
+        ]
+    },
+    {
+        "fromId": "overworld_c2",
+        "toId": "overworld_c2_cave_behind_spring",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_c2_cave_behind_spring",
+        "toId": "overworld_c2"
+    },
+    {
+        "fromId": "overworld_c2",
+        "toId": "overworld_c2_graveyard_house",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_d2",
+        "toId": "overworld_d3",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d2",
+        "toId": "overworld_d2_watermill",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d2",
+        "toId": "overworld_d2_behind_spring",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_d2",
+        "toId": "overworld_d2_cave",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "overworld_d2_cave",
+        "toId": "overworld_d2_cave_behind_merman",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_d2_behind_spring",
+        "toId": "overworld_d2"
+    },
+    {
+        "fromId": "overworld_d2_behind_spring",
+        "toId": "overworld_d1",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d2_behind_spring",
+        "toId": "overworld_c1_elevated_cavern",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_d2_arches",
+        "toId": "overworld_d1",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d2_arches",
+        "toId": "overworld_d2_chest_cliff"
+    },
+    {
+        "fromId": "overworld_d2_chest_cliff",
+        "toId": "overworld_d2"
+    },
+    {
+        "fromId": "overworld_d2_arches",
+        "toId": "overworld_e2",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_d3",
+        "toId": "overworld_d4",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d3",
+        "toId": "overworld_d3_behind_vines",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_d3",
+        "toId": "overworld_e3_bottom_left",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d3",
+        "toId": "overworld_e3",
+        "twoWay": true,
+        "requiredItems": [
+            "Sand Cape"
+        ]
+    },
+    {
+        "fromId": "overworld_d3",
+        "toId": "overworld_e3_bottom_left_island",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_d3",
+        "toId": "overworld_d3_behind_bricks",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_d3",
+        "toId": "tarn_manor",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d3_behind_vines",
+        "toId": "overworld_d3_behind_bricks"
+    },
+    {
+        "fromId": "overworld_d3_behind_bricks",
+        "toId": "overworld_d3_behind_spring",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_d3_behind_spring",
+        "toId": "overworld_d3_behind_bricks"
+    },
+    {
+        "fromId": "overworld_d3_behind_spring",
+        "toId": "overworld_d3_behind_spring_and_vines",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_d3_behind_spring",
+        "toId": "overworld_d3"
+    },
+    {
+        "fromId": "overworld_d4",
+        "toId": "overworld_c4",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d4",
+        "toId": "overworld_d4_behind_long_boots",
+        "twoWay": true,
+        "requiredItems": [
+            "Long Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_d4_behind_long_boots",
+        "toId": "overworld_c4_right_cliff_behind_long_boots",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d4",
+        "toId": "reptile_lair_side_cavern",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_d4",
+        "toId": "reptile_lair",
+        "requiredItems": [
+            "Hunter's Bow",
+            "Long Boots",
+            "Merman Boots",
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "reptile_lair",
+        "toId": "reptile_lair_side_cavern",
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "reptile_lair",
+        "toId": "reptile_lair_behind_flail",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+
+    {
+        "fromId": "overworld_c4",
+        "toId": "overworld_b4",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_c4",
+        "toId": "coastal_cave",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_c4_behind_long_boots",
+        "toId": "overworld_c4_behind_spring",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_c4_behind_spring",
+        "toId": "overworld_c4"
+    },
+    {
+        "fromId": "overworld_c4",
+        "toId": "overworld_c4_behind_long_boots",
+        "requiredItems": [
+            "Long Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_c4_behind_long_boots",
+        "toId": "overworld_c4"
+    },
+
+    {
+        "fromId": "overworld_c1_elevated_cavern",
+        "toId": "overworld_c1"
+    },
+    {
+        "fromId": "overworld_c1",
+        "toId": "overworld_b1",
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_c1",
+        "toId": "magyscar",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail",
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "magyscar",
+        "toId": "magyscar_behind_bomb_or_fire_wand",
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "magyscar",
+        "toId": "magyscar_behind_bomb_or_fire_wand",
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "magyscar_behind_bomb_or_fire_wand",
+        "toId": "magyscar"
+    },
+    {
+        "fromId": "magyscar_behind_bomb_or_fire_wand",
+        "toId": "magyscar_behind_bomb",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "overworld_c1",
+        "toId": "overworld_c1_right_sector",
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_c1_right_sector",
+        "toId": "overworld_c1"
+    },
+    {
+        "fromId": "overworld_c1_right_sector",
+        "toId": "overworld_d1",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d1",
+        "toId": "overworld_c1_cliff",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d1",
+        "toId": "overworld_e1_top_left",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_d1",
+        "toId": "torla_mountain",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand",
+            "Ice Wand",
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "torla_mountain",
+        "toId": "torla_mountain_behind_charm_boots",
+        "twoWay": true,
+        "requiredItems": [
+            "Charm Boots"
+        ]
+    },
+    {
+        "fromId": "torla_mountain_behind_charm_boots",
+        "toId": "torla_mountain_behind_spring",
+        "twoWay": true,
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_c1_cliff",
+        "toId": "overworld_c1"
+    },
+
+    {
+        "fromId": "overworld_b1",
+        "toId": "overworld_c1"
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "overworld_b2"
+    },
+
+    {
+        "fromId": "overworld_d1",
+        "toId": "overworld_d1_cliff_maze",
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_d1_cliff_maze",
+        "toId": "overworld_d1"
+    },
+    {
+        "fromId": "overworld_d1_cliff_maze",
+        "toId": "ice_manor",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_b4",
+        "toId": "overworld_b4_behind_merman",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_b4",
+        "toId": "overworld_b4_behind_bomb",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "overworld_b4",
+        "toId": "overworld_b4_nava_hut_behind_spring",
+        "twoWay": true,
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_b4",
+        "toId": "nava_keep",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb",
+            "Merman Boots",
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_b4_behind_bomb",
+        "toId": "overworld_a4_right",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_b4_behind_bomb",
+        "toId": "overworld_b3_megalith",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_b4_behind_bomb",
+        "toId": "overworld_b3_elevated",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+
+    {
+        "fromId": "overworld_b3_elevated",
+        "toId": "overworld_b3"
+    },
+    {
+        "fromId": "overworld_b3",
+        "toId": "overworld_b3_behind_vines",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_b3",
+        "toId": "overworld_b3_top_left",
+        "twoWay": true,
+        "requiredNodes": [
+            "coal_mine"
+        ]
+    },
+    {
+        "fromId": "overworld_b3_top_left",
+        "toId": "overworld_b2_left",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_b3_top_left",
+        "toId": "overworld_b3_megalith",
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_b3_megalith",
+        "toId": "overworld_b3_top_left"
+    },
+    {
+        "fromId": "overworld_b3",
+        "toId": "overworld_b3_behind_power_glove",
+        "requiredItems": [
+            "Power Glove"
+        ]
+    },
+    {
+        "fromId": "overworld_b3_behind_power_glove",
+        "toId": "overworld_b3"
+    },
+    {
+        "fromId": "overworld_b3",
+        "toId": "riverside_casino",
+        "twoWay": true,
+        "requiredItems": [
+            "Secret Pass"
+        ]
+    },
+    {
+        "fromId": "overworld_b3",
+        "toId": "overworld_b2",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_a4_right",
+        "toId": "overworld_b4_behind_power_glove",
+        "twoWay": true,
+        "requiredItems": [
+            "Power Glove"
+        ]
+    },
+    {
+        "fromId": "overworld_a4_right",
+        "toId": "overworld_a4_middle",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_a4_right",
+        "toId": "overworld_a3_right",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_a4_left",
+        "toId": "overworld_a4_middle",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_a4_left",
+        "toId": "overworld_a4_manor_caves",
+        "twoWay": true,
+        "requiredItems": [
+            "Power Glove"
+        ]
+    },
+    {
+        "fromId": "overworld_a4_left",
+        "toId": "overworld_a3_left",
+        "twoWay": true
+    },
+    {
+        "fromId": "fire_manor",
+        "toId": "overworld_a4_behind_manor",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "fire_manor",
+        "toId": "overworld_a4_right"
+    },
+    {
+        "fromId": "fire_manor",
+        "toId": "overworld_a4_left"
+    },
+    {
+        "fromId": "overworld_a4_manor_caves",
+        "toId": "overworld_a4_manor_caves_behind_flail",
+        "requiredItems": [
+            "Iron Flail",
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_a4_manor_caves_behind_flail",
+        "toId": "overworld_a4_manor_caves"
+    },
+    {
+        "fromId": "overworld_a4_manor_caves_behind_flail",
+        "toId": "fire_manor",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "fire_manor",
+        "toId": "overworld_a4_manor_caves_behind_flail"
+    },
+    {
+        "fromId": "overworld_a4_behind_manor",
+        "toId": "overworld_a4_middle"
+    },
+    {
+        "fromId": "overworld_a4_middle",
+        "toId": "overworld_a3_megalith",
+        "requiredItems": [
+            "Power Glove"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_right",
+        "toId": "overworld_a3_right_behind_vines",
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_right_behind_vines",
+        "toId": "overworld_a3_right"
+    },
+    {
+        "fromId": "overworld_a3_right_behind_vines",
+        "toId": "overworld_b3_top_left"
+    },
+    {
+        "fromId": "overworld_a3_left",
+        "toId": "overworld_a3_left_behind_power_glove",
+        "twoWay": true,
+        "requiredItems": [
+            "Power Glove"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_left",
+        "toId": "overworld_a3_mimics_cave",
+        "twoWay": true,
+        "requiredItems": [
+            "Power Glove",
+            "Spring Bean",
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_left",
+        "toId": "overworld_a3_left_behind_merman",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_left_behind_power_glove",
+        "toId": "overworld_a2",
+        "twoWay": true,
+        "requiredItems": [
+            "Tree Gem"
+        ]
+    },
+
+    {
+        "fromId": "overworld_a4_middle",
+        "toId": "river_network",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_left_behind_merman",
+        "toId": "river_network",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_a3_megalith",
+        "toId": "river_network",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_a4_right",
+        "toId": "river_network",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_b2",
+        "toId": "river_network",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "river_network",
+        "toId": "overworld_b4",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "toId": "river_network",
+        "fromId": "fairy_pond",
+        "twoWay": true,
+        "requiredItems": [
+            "Aqua Cape"
+        ]
+    },
+
+    {
+        "fromId": "overworld_b2",
+        "toId": "overworld_b1",
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+    {
+        "fromId": "overworld_b2",
+        "toId": "overworld_b2_cave_to_lake",
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "overworld_b2_cave_to_lake",
+        "toId": "overworld_b2"
+    },
+    {
+        "fromId": "overworld_b2_cave_to_lake",
+        "toId": "overworld_b2_cave_to_lake_behind_merman",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_b2_cave_to_lake_behind_merman",
+        "toId": "overworld_b1_left",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_b2",
+        "toId": "overworld_b2_upper_mines",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb",
+            "Iron Flail"
+        ]
+    },
+
+    {
+        "fromId": "overworld_b2",
+        "toId": "coal_mine",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "coal_mine",
+        "toId": "overworld_b2_left"
+    },
+
+    {
+        "fromId": "overworld_a2",
+        "toId": "overworld_a2_behind_vines",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_a2_behind_vines",
+        "toId": "overworld_a2_behind_vines_and_bomb",
+        "twoWay": true,
+        "requiredItems": [
+            "Bomb"
+        ]
+    },
+    {
+        "fromId": "overworld_a2_behind_vines_and_bomb",
+        "toId": "overworld_a2"
+    },
+    {
+        "fromId": "overworld_a2_behind_vines_and_bomb",
+        "toId": "overworld_a1",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_a1",
+        "toId": "great_tree_tower",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_e4",
+        "toId": "overworld_e4_well",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_e4_well",
+        "toId": "overworld_e4_well_behind_vines",
+        "twoWay": true,
+        "requiredItems": [
+            "Fire Wand"
+        ]
+    },
+    {
+        "fromId": "overworld_e4",
+        "toId": "lurvy_shop_repeatable",
+        "twoWay": true
+    },
+    {
+        "fromId": "lurvy_shop_repeatable",
+        "toId": "lurvy_shop_unique",
+        "twoWay": true
+    },
+    {
+        "fromId": "lurvy_shop_repeatable",
+        "toId": "lurvy_shop_repair",
+        "twoWay": true,
+        "requiredItems": [
+            "Broken Armor"
+        ]
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "overworld_b1_island",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_b1_island",
+        "toId": "overworld_b2",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+
+    {
+        "fromId": "overworld_e3_bottom_left",
+        "toId": "overworld_e4",
+        "twoWay": true,
+        "requiredItems": [
+            "Iron Flail"
+        ]
+    },
+
+    {
+        "fromId": "overworld_e4",
+        "toId": "overworld_e4_behind_merman",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_e4",
+        "toId": "overworld_e3",
+        "twoWay": true
+    },
+
+    {
+        "fromId": "overworld_e3",
+        "toId": "overworld_e3_behind_cape_or_boots",
+        "requiredItems": [
+            "Long Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_e3",
+        "toId": "overworld_e3_behind_cape_or_boots",
+        "requiredItems": [
+            "Sand Cape"
+        ]
+    },
+    {
+        "fromId": "overworld_e3_behind_cape_or_boots",
+        "toId": "overworld_e3"
+    },
+    {
+        "fromId": "overworld_e3",
+        "toId": "ancient_shrine",
+        "requiredItems": [
+            "Sand Cape"
+        ]
+    },
+    {
+        "fromId": "overworld_e3",
+        "toId": "ancient_shrine",
+        "requiredItems": [
+            "Long Boots"
+        ]
+    },
+    {
+        "fromId": "ancient_shrine",
+        "toId": "overworld_e3"
+    },
+    {
+        "fromId": "ancient_shrine",
+        "toId": "ancient_shrine_behind_cape",
+        "twoWay": true,
+        "requiredItems": [
+            "Sand Cape"
+        ]
+    },
+    {
+        "fromId": "overworld_e3",
+        "toId": "overworld_e3_cape_cave",
+        "twoWay": true,
+        "requiredItems": [
+            "Sand Cape"
+        ]
+    },
+    {
+        "fromId": "overworld_e3",
+        "toId": "overworld_e2_behind_long_boots",
+        "requiredItems": [
+            "Long Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_e2_behind_long_boots",
+        "toId": "overworld_e3"
+    },
+    {
+        "fromId": "overworld_e2",
+        "toId": "overworld_e3"
+    },
+    {
+        "fromId": "overworld_e2",
+        "toId": "overworld_e1",
+        "twoWay": true
+    },
+    {
+        "fromId": "overworld_e2",
+        "toId": "overworld_e2_behind_long_boots",
+        "requiredItems": [
+            "Long Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_e2_behind_long_boots",
+        "toId": "overworld_e2"
+    },
+    {
+        "fromId": "overworld_e2_behind_long_boots",
+        "toId": "overworld_e2_cave_behind_ice_wand",
+        "twoWay": true,
+        "requiredItems": [
+            "Ice Wand"
+        ]
+    },
+
+    {
+        "fromId": "riverside_casino",
+        "toId": "riverside_casino_shooting_range",
+        "twoWay": true,
+        "requiredItems": [
+            "Hunter's Bow"
+        ]
+    },
+
+    {
+        "fromId": "coastal_cave",
+        "toId": "coastal_cave_behind_merman",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+
+    {
+        "fromId": "overworld_d2",
+        "toId": "underground_waterway",
+        "requiredItems": [
+            "Merman Boots",
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "underground_waterway",
+        "toId": "overworld_d2",
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "underground_waterway",
+        "toId": "overworld_e1_left",
+        "twoWay": true,
+        "requiredItems": [
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "overworld_e1_left",
+        "toId": "overworld_e1"
+    },
+    {
+        "fromId": "overworld_e1_left",
+        "toId": "nirude_lair",
+        "twoWay": true,
+        "requiredNodes": [
+            "overworld_e1_top_left",
+            "overworld_e1_behind_spring"
+        ]
+    },
+    {
+        "fromId": "overworld_e1",
+        "toId": "overworld_e1_left",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_e1",
+        "toId": "overworld_e1_behind_spring",
+        "requiredItems": [
+            "Spring Bean"
+        ]
+    },
+    {
+        "fromId": "overworld_e1_behind_spring",
+        "toId": "overworld_e1"
+    },
+
+    {
+        "fromId": "overworld_c4",
+        "toId": "merrick_shop_1",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 15 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_1",
+        "toId": "merrick_shop_2",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 20 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_2",
+        "toId": "merrick_shop_3",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 25 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_3",
+        "toId": "merrick_shop_4",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 30 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_4",
+        "toId": "merrick_shop_5",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 35 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_5",
+        "toId": "merrick_shop_6",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 40 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_6",
+        "toId": "merrick_shop_7",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 45 }
+        ]
+    },
+    {
+        "fromId": "merrick_shop_7",
+        "toId": "merrick_shop_8",
+        "twoWay": true,
+        "requiredItems": [
+            { "name": "Gilded Falcon", "quantity": 50 }
+        ]
+    },
+
+    {
+        "fromId": "overworld_b1",
+        "toId": "crest_ruby",
+        "twoWay": true,
+        "requiredItems": [ "Ruby Crest" ]
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "crest_sapphire",
+        "twoWay": true,
+        "requiredItems": [ "Sapphire Crest" ]
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "crest_topaz",
+        "twoWay": true,
+        "requiredItems": [ "Topaz Crest" ]
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "crest_diamond",
+        "twoWay": true,
+        "requiredItems": [ "Diamond Crest" ]
+    },
+    {
+        "fromId": "overworld_b1_left",
+        "toId": "crest_emerald",
+        "twoWay": true,
+        "requiredItems": [ "Emerald Crest" ]
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "crest_agate",
+        "twoWay": true,
+        "requiredItems": [ "Agate Crest" ]
+    },
+    {
+        "fromId": "overworld_b1_island",
+        "toId": "crest_garnet",
+        "twoWay": true,
+        "requiredItems": [ "Garnet Crest" ]
+    },
+    {
+        "fromId": "overworld_b1",
+        "toId": "lake_shrine_exterior",
+        "twoWay": true,
+        "requiredNodes": [
+            "crest_ruby",
+            "crest_sapphire",
+            "crest_topaz",
+            "crest_agate",
+            "crest_emerald",
+            "crest_garnet",
+            "crest_diamond"
+        ]
+    },
+    {
+        "fromId": "lake_shrine_exterior",
+        "toId": "lake_shrine_exterior_behind_bow",
+        "twoWay": true,
+        "requiredItems": [
+            "Hunter's Bow",
+            "Merman Boots"
+        ]
+    },
+    {
+        "fromId": "lake_shrine_exterior_behind_bow",
+        "toId": "lake_shrine_interior",
+        "twoWay": true
+    },
+    {
+        "fromId": "lake_shrine_interior",
+        "toId": "lake_shrine_interior_behind_flail",
+        "twoWay": true,
+        "requiredItems": [ "Iron Flail" ]
+    },
+    {
+        "fromId": "lake_shrine_interior_behind_flail",
+        "toId": "lake_shrine_interior_behind_spring",
+        "twoWay": true,
+        "requiredItems": [ "Spring Bean" ]
+    },
+    {
+        "fromId": "lake_shrine_interior_behind_spring",
+        "toId": "melzas_fight"
+    },
+    {
+        "fromId": "melzas_fight",
+        "toId": "end",
+        "requiredItems": [ "Fire Wand" ]
+    }
+]

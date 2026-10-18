@@ -2,7 +2,8 @@
 
 Generation writes a placement seed map. The Alundra randomizer reads that file
 with --placement-in and patches a USA 1.1 disc. This world does not patch the
-disc and does not speak to a client.
+disc. The BizHawk client logs in to a room. It does not read checks or grant
+items yet.
 
 Another slot's item may be placed on an Alundra check. The placement file
 records that item as an object. This slot's own items stay in-game item ids.
@@ -20,6 +21,8 @@ from BaseClasses import CollectionState, Item, ItemClassification, Region, Tutor
 from Options import OptionError
 from worlds.AutoWorld import WebWorld, World
 
+# Register AlundraClient with BizHawkClient
+from . import client
 from .data import (
     GAME_DATA,
     CREST_NODES,
@@ -60,7 +63,7 @@ class AlundraWebWorld(WebWorld):
     option_groups = option_groups
     tutorials = [Tutorial(
         "Setup Guide",
-        "Generate a placement file and patch a USA 1.1 Alundra disc.",
+        "Generate a placement file, patch a USA 1.1 disc, and connect the BizHawk client.",
         "English",
         "setup_en.md",
         "setup/en",

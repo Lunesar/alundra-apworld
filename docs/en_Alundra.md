@@ -1,8 +1,8 @@
 # Alundra
 
-Find the crests, open Lake Shrine, and defeat Melzas. Generation writes a placement file for the Alundra randomizer. The world does not connect a client.
+Find the crests, open Lake Shrine, and defeat Melzas. Generation writes a placement file for the Alundra randomizer. A BizHawk client can log in to the room. It does not read checks or grant items yet.
 
-The randomizer patches a USA 1.1 disc from that file. Hints inside the game are written then, by the randomizer. Archipelago's own hint points are not shown in the game until a client exists.
+The randomizer patches a USA 1.1 disc from that file. Hints inside the game are written then, by the randomizer. Archipelago hint points are not shown in the game.
 
 ## Goal
 

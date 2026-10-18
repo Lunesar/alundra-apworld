@@ -42,3 +42,14 @@ alundra-randomizer --placement-in=/path/to/the-file.alundra.json --nopause
 ```
 
 The randomizer writes the patched BIN/CUE and, unless you turned the spoiler off, the hint log. The placement file already contains the settings, so do not also pass `--preset`.
+
+## Connect
+
+The Lua script ships with Archipelago at `data/lua/connector_bizhawk_generic.lua`. Open BizHawk Client from the Archipelago Launcher. That window loads this world's handler.
+
+1. Open the patched USA 1.1 disc in BizHawk with the NymaShock core. In Config > Customize, enable "Run in background" so the client stays connected when the window is not focused. BizHawk 2.7 and 2.8 need the Lua core set to Lua+LuaInterface under Config > Customize > Advanced, then a restart. 2.9 and newer already use a core the connector can load.
+2. In EmuHawk, open Tools > Lua Console and leave that window open. Choose Script > Open Script and open `data/lua/connector_bizhawk_generic.lua` from the Archipelago install.
+3. Open BizHawk Client. The first time, it asks for `EmuHawk.exe`.
+4. When the log says `Running handler for Alundra`, enter the room address, for example `archipelago.gg:38281`, and connect. At `Enter slot name:`, enter the `name` from the player YAML.
+
+The client logs `Logged in as <slot name>.` when the room accepts the slot. It then waits. Location checks and item grants come later.

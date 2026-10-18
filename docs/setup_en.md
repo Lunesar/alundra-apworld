@@ -29,7 +29,9 @@ Alundra: {}
 
 An empty `Alundra` block uses the same defaults as the website's Default preset. The dagger, cloth armor, and short boots are added at generation if the starting inventory does not already list them.
 
-Generate a seed that contains only this slot. The world rejects another player's item, so adding other games to the same generation fails when one of their items would land in Alundra.
+A seed can include other games. Another slot's item may land on an Alundra check. Checks that refuse a precious item also refuse a remote item: the restocking shelves at Lurvy's and Naomi's, and the item on the table in Tarn's Manor. The placement file uses the Multiworld format when it contains a remote item, and the Alundra format when every Alundra check holds an Alundra item.
+
+`local_items` in the YAML keeps a named Alundra item in this slot. Listing every Alundra item there fills every check, so another slot's item has nowhere to land and generation fails.
 
 ## Patch
 

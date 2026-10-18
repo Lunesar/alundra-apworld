@@ -1,8 +1,11 @@
 """Archipelago world for Alundra.
 
-Generation fills locations with this world's own items and writes a placement
-seed map. The Alundra randomizer reads that file with --placement-in and patches
-a USA 1.1 disc. This world does not patch the disc and does not speak to a client.
+Generation writes a placement seed map. The Alundra randomizer reads that file
+with --placement-in and patches a USA 1.1 disc. This world does not patch the
+disc and does not speak to a client.
+
+Another slot's item may be placed on an Alundra check. The placement file
+records that item as an object. This slot's own items stay in-game item ids.
 """
 
 from __future__ import annotations
@@ -13,7 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from BaseClasses import CollectionState, Item, Region, Tutorial
+from BaseClasses import CollectionState, Item, ItemClassification, Region, Tutorial
 from Options import OptionError
 from worlds.AutoWorld import WebWorld, World
 
@@ -46,7 +49,7 @@ from .logic import (
     folded_item_names,
 )
 from .options import AlundraOptions, option_groups
-from .placement import build_placement_document, write_placement
+from .placement import OutsidePlacement, allows_outside_item, build_placement_document, write_placement
 
 logger = logging.getLogger("Archipelago")
 
@@ -87,7 +90,7 @@ class AlundraWebWorld(WebWorld):
 
 
 class AlundraWorld(World):
-    """Closed world. Every location receives an Alundra item id the randomizer can patch."""
+    """Placement file for the Alundra randomizer. A check can hold another slot's item."""
 
     game = "Alundra"
     web = AlundraWebWorld()
@@ -117,8 +120,6 @@ class AlundraWorld(World):
             self._fixed = fixed_location_map(self._settings)
         except LogicError as error:
             raise OptionError(str(error)) from error
-        # Solo generation clears this afterwards. The item rules are what reject another player's item.
-        self.options.local_items.value |= set(self.item_name_to_id)
 
     def create_regions(self) -> None:
         regions = self._create_node_regions()
@@ -209,23 +210,28 @@ class AlundraWorld(World):
         return "Herbs"
 
     def generate_output(self, output_directory: str) -> None:
-        placements: dict[int, int] = {}
+        placements: dict[int, int | OutsidePlacement] = {}
         for location in self.multiworld.get_locations(self.player):
             if location.address is None:
                 continue
             item = location.item
-            if (
-                item is None
-                or item.player != self.player
-                or not isinstance(item, AlundraItem)
-                or item.in_game_id is None
-            ):
-                other = "nothing" if item is None else f"{item.name} for player {item.player}"
+            if item is None:
+                raise RuntimeError(f"Alundra location '{location.name}' has no item.")
+            native_id = self._native_item_id(item)
+            if native_id is not None:
+                placements[location.address] = native_id
+                continue
+            if item.player == self.player:
                 raise RuntimeError(
-                    f"Alundra location '{location.name}' holds {other}. "
-                    "This world only writes in-game item ids, so another player's item cannot be patched."
+                    f"Alundra location '{location.name}' holds {item.name}, which is not an Alundra item."
                 )
-            placements[location.address] = item.in_game_id
+            source = GAME_DATA.source_by_id[location.address]
+            if source.forbid_precious:
+                raise RuntimeError(
+                    f"Alundra location '{location.name}' holds {item.name} for player {item.player}. "
+                    "A check that refuses a precious item also refuses a remote item."
+                )
+            placements[location.address] = self._outside_placement(item)
 
         document = build_placement_document(
             self._settings,
@@ -372,7 +378,17 @@ class AlundraWorld(World):
         merrick = source.has_merrick
 
         def rule(item: Item) -> bool:
-            if item.player != player or not isinstance(item, AlundraItem) or item.in_game_id is None:
+            # Events use a null code. Real items, including another slot's, have one.
+            code = item.code
+            if isinstance(code, bool) or not isinstance(code, int) or code <= 0:
+                return False
+            if item.player != player:
+                return allows_outside_item(
+                    block_progression=block_progression,
+                    progression=bool(ItemClassification.progression & item.classification),
+                    forbid_precious=forbid_precious,
+                )
+            if not isinstance(item, AlundraItem) or item.in_game_id is None:
                 return False
             record = GAME_DATA.item_by_id.get(item.in_game_id)
             if record is None or record.name != item.name:
@@ -388,6 +404,27 @@ class AlundraWorld(World):
             return True
 
         return rule
+
+    def _native_item_id(self, item: Item) -> int | None:
+        # Another Alundra slot's item has an in-game id too. It belongs to that slot.
+        if item.player != self.player or not isinstance(item, AlundraItem) or item.in_game_id is None:
+            return None
+        record = GAME_DATA.item_by_id.get(item.in_game_id)
+        if record is None or record.name != item.name:
+            return None
+        return item.in_game_id
+
+    def _outside_placement(self, item: Item) -> OutsidePlacement:
+        code = item.code
+        if isinstance(code, bool) or not isinstance(code, int) or code <= 0:
+            raise RuntimeError(
+                f"Item {item.name} for player {item.player} has no Archipelago item id."
+            )
+        return OutsidePlacement(
+            player=self.multiworld.get_player_name(item.player),
+            item=item.name,
+            flags=int(item.classification),
+        )
 
     def _precollected_counts(self) -> Counter[str]:
         counts: Counter[str] = Counter()

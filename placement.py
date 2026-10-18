@@ -1,9 +1,20 @@
-"""Placement seed map, format 1. --placement-in reads this and patches the disc."""
+"""Placement seed map. --placement-in reads this and patches the disc.
+
+The Alundra format is only in-game item ids. The Multiworld format is the same
+file with at least one remote item. A remote placement has exactly these keys:
+
+    {"player": "Player", "item": "Key Item", "classification": "progression"}
+
+player is 1..16 printable ASCII characters and item is 1..28, with no backslash.
+classification is progression, useful, filler, or trap. itemsDistribution counts
+only the in-game ids.
+"""
 
 from __future__ import annotations
 
 import json
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 from .data import GAME_DATA, ITEM_COUNT, REQUIRED_STARTING_ITEMS, GameData
@@ -12,6 +23,74 @@ from .logic import LogicSettings, preplaced_crest_names
 
 class PlacementError(Exception):
     pass
+
+
+# The disc line is "player - item", 47 characters. These limits are the reader's.
+_PLAYER_NAME_MAX = 16
+_ITEM_NAME_MAX = 28
+_PROGRESSION = 0b00001
+_USEFUL = 0b00010
+_TRAP = 0b00100
+# The JSON field is numeric. These names are the Alundra format and the Multiworld format.
+FORMAT_ALUNDRA = 1
+FORMAT_MULTIWORLD = 2
+
+
+@dataclass(frozen=True)
+class OutsidePlacement:
+    """An item from another Archipelago slot, placed on an Alundra check."""
+
+    player: str
+    item: str
+    flags: int
+
+
+def allows_outside_item(
+    *, block_progression: bool, progression: bool, forbid_precious: bool = False,
+) -> bool:
+    """A remote item may fill a check.
+
+    forbidPreciousItems marks the restocking shelves, and the table in Tarn's
+    Manor. A precious Alundra item cannot sit there. A remote item cannot
+    either: the shelf offers it again, and buying it spends gilder and adds
+    nothing. A non-progression check still refuses a progression item.
+    """
+    if forbid_precious:
+        return False
+    return not (block_progression and progression)
+
+
+def _remote_classification(flags: int) -> str:
+    if isinstance(flags, bool) or not isinstance(flags, int) or flags < 0:
+        raise PlacementError(f"Remote item classification {flags!r} is not a flag value.")
+    # One name, matching the reader. Progression outranks the other flags.
+    if flags & _PROGRESSION:
+        return "progression"
+    if flags & _TRAP:
+        return "trap"
+    if flags & _USEFUL:
+        return "useful"
+    return "filler"
+
+
+def _remote_text(text: object, limit: int, fallback: str) -> str:
+    # Printable ASCII, no backslash. The disc and the reader both stop there.
+    if not isinstance(text, str):
+        raise PlacementError(f"Remote item {fallback.lower()} name must be a string.")
+    kept = [character for character in text if 0x20 <= ord(character) <= 0x7E and character != "\\"]
+    # Dropped characters can leave a double space. The disc line is short.
+    cleaned = " ".join("".join(kept).split())
+    if not cleaned:
+        cleaned = fallback
+    return cleaned[:limit]
+
+
+def _encode_outside(placed: OutsidePlacement) -> dict:
+    return {
+        "player": _remote_text(placed.player, _PLAYER_NAME_MAX, "Player"),
+        "item": _remote_text(placed.item, _ITEM_NAME_MAX, "Item"),
+        "classification": _remote_classification(placed.flags),
+    }
 
 
 _GAME_SETTING_KEYS = (
@@ -33,7 +112,7 @@ def _check_seed(seed: int) -> None:
         raise PlacementError("Placement seed must fit in an unsigned 32-bit value.")
 
 
-def _check_location_ids(placements: dict[int, int], game_data: GameData) -> None:
+def _check_location_ids(placements: dict[int, int | OutsidePlacement], game_data: GameData) -> None:
     expected = {source.id for source in game_data.sources}
     got = set(placements)
     if got != expected:
@@ -43,18 +122,22 @@ def _check_location_ids(placements: dict[int, int], game_data: GameData) -> None
 
 
 def _encode_placements(
-    placements: dict[int, int], game_data: GameData,
-) -> tuple[dict[str, int], Counter[str]]:
-    # Location ids become the placement map. Item names are counted for itemsDistribution.
+    placements: dict[int, int | OutsidePlacement], game_data: GameData,
+) -> tuple[dict[str, int | dict], Counter[str]]:
+    # Location ids become the placement map. In-game items are counted for
+    # itemsDistribution. Another slot's item is an object and is not counted.
     counted: Counter[str] = Counter()
-    encoded: dict[str, int] = {}
+    encoded: dict[str, int | dict] = {}
     for location_id in sorted(placements):
-        item_id = placements[location_id]
-        if isinstance(item_id, bool) or not isinstance(item_id, int) or not 0 <= item_id < ITEM_COUNT:
-            raise PlacementError(f"Location {location_id} has item id {item_id}, which is not a game item.")
-        record = game_data.item_by_id[item_id]
+        placed = placements[location_id]
+        if isinstance(placed, OutsidePlacement):
+            encoded[str(location_id)] = _encode_outside(placed)
+            continue
+        if isinstance(placed, bool) or not isinstance(placed, int) or not 0 <= placed < ITEM_COUNT:
+            raise PlacementError(f"Location {location_id} has item id {placed}, which is not a game item.")
+        record = game_data.item_by_id[placed]
         counted[record.name] += 1
-        encoded[str(location_id)] = item_id
+        encoded[str(location_id)] = placed
     return encoded, counted
 
 
@@ -120,7 +203,7 @@ def _randomizer_settings(settings: LogicSettings, inventory: list[str], counted:
 
 def build_placement_document(
     settings: LogicSettings,
-    placements: dict[int, int],
+    placements: dict[int, int | OutsidePlacement],
     starting_inventory: list[str],
     game_data: GameData = GAME_DATA,
 ) -> dict:
@@ -131,8 +214,10 @@ def build_placement_document(
     _check_distribution_counts(counted)
     inventory = _starting_inventory(starting_inventory, game_data)
     _check_required_starting_items(inventory)
+    # A remote item selects the Multiworld format. Otherwise the file stays the Alundra format.
+    remote = any(isinstance(placed, OutsidePlacement) for placed in placements.values())
     return {
-        "format": 1,
+        "format": FORMAT_MULTIWORLD if remote else FORMAT_ALUNDRA,
         "seed": settings.seed,
         "gameSettings": _game_settings(settings),
         "randomizerSettings": _randomizer_settings(settings, inventory, counted),

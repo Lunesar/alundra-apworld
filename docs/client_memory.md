@@ -132,7 +132,13 @@ For a client, the grant that matches "the player now has the item" without depen
 
 A taken source is an event-flag bit, not a byte next to the inventory record. Map scripts turn bits on with opcode `0x05` (`FlagOn`) and test them with `0x30` / `0x31` (`IfFlagOn` / `IfFlagOff`). The same bits are what `flags.hpp` names. `item_source.json` does not store a flag. Its `address` / `spriteAddress` fields are offsets in `DATAS.BIN` where the patch writes the item id, not RAM, and not the checked-bit.
 
-Which event code belongs to which location id is **TBD**. Do not derive it from the item-id file offset. Until that table exists, a client cannot report a location check from memory.
+Which event code belongs to which location id is **TBD** except the rows below. Do not derive one from the item-id file offset. A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. Shops, Merrick, and NPC gifts store an item id in script bytes, and the two bytes before that id are not a flag. A code whose low 15 bits are `>= 0x800`, or code 0, does not name one chest.
+
+| Location | Source id | Event code | Byte | Bit |
+| --- | --- | --- | --- | --- |
+| Inoa: Chest in Lutas's house (Secret Pass) | 1 | `0x0680` | `0x801DD404` | 0 |
+
+The Lutas record is at DATAS.BIN `0x499699C` on USA 1.1. Its contents byte is `0x39` (Secret Pass), at source address `0x49969AE`. The client reports this one location. The other source ids stay **TBD**.
 
 ### Event-flag encoding
 

@@ -52,4 +52,4 @@ The Lua script ships with Archipelago at `data/lua/connector_bizhawk_generic.lua
 3. Open BizHawk Client. The first time, it asks for `EmuHawk.exe`.
 4. When the log says `Running handler for Alundra`, enter the room address, for example `archipelago.gg:38281`, and connect. At `Enter slot name:`, enter the `name` from the player YAML.
 
-The client logs `Logged in as <slot name>.` when the room accepts the slot. It then waits. Location checks and item grants come later.
+The client logs `Logged in as <slot name>.` when the room accepts the slot. Opening the chest in Lutas's house logs `Checked Inoa: Chest in Lutas's house (Secret Pass).` and sends that location to the room. A chest that was already open is sent on the next watch after login. Other checks, and item grants, come later.

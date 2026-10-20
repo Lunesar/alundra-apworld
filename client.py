@@ -2,7 +2,8 @@
 
 Archipelago ships the Lua connector (`data/lua/connector_bizhawk_generic.lua`).
 This module is the handler that connector talks to. It claims a PlayStation
-image and logs in to a room. It does not read checks or grant items.
+image, logs in to a room, and reports locations listed in ``checks.py``.
+It does not grant items.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 import worlds._bizhawk as bizhawk
 from worlds._bizhawk.client import BizHawkClient
+
+from .checks import EVENT_FLAGS, WATCHED_LOCATION_IDS, checked_locations, flag_read, names_for
 
 if TYPE_CHECKING:
     from worlds._bizhawk.context import BizHawkClientContext
@@ -37,6 +40,12 @@ class AlundraClient(BizHawkClient):
     system: ClassVar[str] = "PSX"
     game: ClassVar[str] = "Alundra"
 
+    def __init__(self) -> None:
+        super().__init__()
+        # Locations already written to the log for this connection. The server
+        # still receives a repeat until it drops the id from missing_locations.
+        self._reported: set[int] = set()
+
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         """Claim the image when the TryIncrease prologue matches."""
         try:
@@ -58,10 +67,30 @@ class AlundraClient(BizHawkClient):
         return True
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        """Login does not watch memory. Checks and item grants come later."""
+        """Send LocationChecks for event-flag bits that are on. Does not grant items."""
+        if not (ctx.missing_locations & WATCHED_LOCATION_IDS):
+            return
+        read = flag_read()
+        if read is None:
+            return
+        offset, length = read
+        try:
+            flag_bytes = (await bizhawk.read(ctx.bizhawk_ctx, [(offset, length, _MAIN_RAM)]))[0]
+        except _READ_ERRORS:
+            return
+        sent = await ctx.check_locations(checked_locations(flag_bytes, offset - EVENT_FLAGS))
+        unreported = sent - self._reported
+        if not unreported:
+            return
+        self._reported.update(unreported)
+        from CommonClient import logger
+        logger.info("Checked %s.", ", ".join(names_for(unreported)))
 
     def on_package(self, ctx: "BizHawkClientContext", cmd: str, args: dict) -> None:
         if cmd != "Connected":
             return
+        # A new room has its own missing list. Log a check again if this room
+        # has not recorded it yet.
+        self._reported.clear()
         from CommonClient import logger
         logger.info("Logged in as %s.", ctx.auth)

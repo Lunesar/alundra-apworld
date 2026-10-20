@@ -63,7 +63,7 @@ There is no separate "collected items" bitfield in work RAM. Owning an item mean
 
 ### Inventory records (`0x801DD82E`)
 
-128 records, 4 bytes each, item id 0 through 127. Init zeroes both halfwords of all 128. The runtime id limit lives in the u32 at `0x8012E234`, which init sets to 99: `TryIncrease` rejects an id that is negative or `>=` that word. Randomizer item ids (`item_codes.hpp`) stop at `0x59`, which is inside that range.
+128 records, 4 bytes each, item id 0 through 127. Init zeroes both halfwords of all 128. The runtime id limit lives in the u32 at `0x8012E234`, which init sets to 99: `TryIncrease` rejects an id that is negative or `>=` that word. Randomizer item ids (`item_codes.hpp`) stop at `0x59`, which is inside that range. Records 126 and 127 are past that limit. The client stores its received-item count there. See Receiving a remote item.
 
 | Field | Location |
 | --- | --- |
@@ -124,7 +124,7 @@ For a client, the grant that matches "the player now has the item" without depen
 - Gilders: call `0x8004F668` or add to the s16 at `0x801DD824` (cap 9999).
 - Falcon: add 1 to the u16 at `0x801DD82A` (cap 50).
 - Magic Seed / crystals: the MP s16 updates above. Calling `GiveItem` also runs effect code.
-- Life Vessel / Dew / Drop / Water: only the actor u32 pair is understood, and only Dew and Life Vessel are fully specified. Calling `GiveItem` for these runs effect code.
+- Life Vessel / Dew / Drop / Water: only the actor u32 pair is understood, and only Dew and Life Vessel are fully specified. Calling `GiveItem` for these runs effect code. The remote Life Vessel grant writes both HP pairs to the same numbers and does not call `GiveItem`. See Receiving a remote item.
 
 `GiveItem` itself is the wrong call while a map is loading, because of those effect calls. `TryIncrease`, `AddGold`, and the s16 stores do not call them. They are also what new game uses before any map is running.
 
@@ -244,8 +244,50 @@ Clear flags for Lars Crypt, the Coastal Cave, the Reptile Lair, the Great Tree, 
 | Requested map id | `0x801F11FC` | u32 | New game and the spawn-apply path store the save spawn map (`0x801DD324`) here. Values are `map_codes.hpp` ids. |
 | Map id last passed to the loader | `0x801F5358` | u32 | `0x8002C440` copies the requested id here when it changes, then calls `0x80083F04`. The save-capture path copies this word back to `0x801DD324`. |
 
-Those two words are equal again as soon as the copy happens, which is at the start of the load, not at the end. Inequality is not a "still loading" latch. A menu-open byte, a fade byte, and a "player has control" byte are **TBD**. Script opcodes `0x10` / `0x11` (`PlayerLoseControl` / `PlayerGainControl`) exist; their RAM flag does not, in this repo.
+Those two words are equal again as soon as the copy happens, which is at the start of the load, not at the end. Inequality is not a "still loading" latch. A fade byte is **TBD**. The menu and text words the client waits on are in Receiving a remote item.
 
-Grants that are only `TryIncrease`, `AddGold`, or an s16/u16 store do not wait on the map. They are safe in the same way new game is, which runs them before the map starts. Grants that go through `GiveItem` are not, because of the effect calls. Until the in-control flag is known, do not call `GiveItem` from the client.
+Grants that are only `TryIncrease`, `AddGold`, or an s16/u16 store do not wait on the map. They are safe in the same way new game is, which runs them before the map starts. Do not call `GiveItem` from the client. Its effect calls are unsafe while a map is loading, and the connector cannot enter MIPS. A Life Vessel grant writes the HP words, and only while the menu and the NPC text box are closed. See Receiving a remote item.
 
 Live X/Y/Z are not the save spawn words. The spawn-apply path scales them before storing elsewhere (`X` becomes `((x * 3) << 3) + 12`, shifted up 16 bits). The live coordinate addresses and the scale for Y/Z are only partly visible and are **TBD**. A client granting items does not need them.
+
+## Receiving a remote item
+
+The BizHawk client grants an item the server sends because a check in another game held this slot's item. It asks for items from other worlds only. A check in Alundra still grants its own item through the chest script, and the new-game patch still grants starting gear. Asking the server for this world's own items would grant them twice.
+
+The client remembers how many of those items it has already granted. That count cannot be derived from HP or from a quantity, because a local Life Vessel and a remote one add to the same counters. It is stored in inventory records 126 and 127, above the runtime id limit of 99 (`0x8012E234`), so `TryIncrease` will not touch them.
+
+| What | Address | Size |
+| --- | --- | --- |
+| Record 126, magic | `0x801DDA26` | u16. `0x4150` once any item has been granted. `0` on a fresh file, together with a count of 0. |
+| Record 126, quantity | `0x801DDA28` | u16. Stays 0. |
+| Record 127, count | `0x801DDA2A` | u16. How many remote items have been granted. |
+| Record 127, quantity | `0x801DDA2C` | u16. Stays 0. |
+
+Both quantity halfwords stay 0 so the owned check (quantity > 0) ignores the records. A menu that lists owned items never looks up a name for them. A fresh file is magic 0 and count 0. Magic `0x4150` with both quantities at 0 is a stored count. A non-zero quantity, magic 0 with a non-zero count, or any other magic means the game used the record. The client leaves it alone, and it grants nothing until the record is recognizable again.
+
+The decomp save image includes all 128 inventory records. If a real memory-card save does not copy records 126 and 127, loading that save puts the count back at 0. The client then grants the queue again and HP climbs a second time.
+
+The client grants one item per watch, and only when the previous watch saw the same state. It waits, and leaves the count where it is, when any of these is true:
+
+- `FLAG_HUD_ALLOWED` (byte `0x801DD403` bit 6) is off.
+- The requested map id at `0x801F11FC` and the loader map id at `0x801F5358` differ. They become equal at the start of a load, so this alone is not a still-loading latch.
+- Any of these words is nonzero. Each is a u32, and `1` means that window is open. `0x80107570`, `0x80107618`, and `0x801076C0` are the same field in three records spaced `0xA8` bytes apart. NPC text uses the first and third. The menu uses the middle one. `0x801531BC` is a second menu word and it moved with `0x80107618` in the passing samples.
+
+| State | Address | Gameplay | Menu | NPC text |
+| --- | --- | --- | --- | --- |
+| Text | `0x80107570` | `0` | `0` | `1` |
+| Menu | `0x80107618` | `0` | `1` | `0` |
+| Text | `0x801076C0` | `0` | `0` | `1` |
+| Menu | `0x801531BC` | `0` | `1` | `0` |
+
+- Save max HP is outside 1..50, save current HP is outside 0..max, or the actor u32 pair at `0x801AC70C` / `0x801AC710` does not equal the save s16 pair.
+
+`0x800DC4B8` does not change when the menu opens or when NPC text is open, so the client does not read it. `0x8010755C` stays `0` at the start of NPC text and turns on only after the box is already up, so the client does not read that either. A fade byte, a control-lock bit, and a forced-sequence bit are still **TBD**.
+
+The write is a guarded compare of every byte just read. A load that changes any of them fails the write, and the same item is tried again. The count moves only together with the item's own bytes.
+
+Life Vessel (`0x53`) does not go through `TryIncrease`. Its max quantity is 0, so that call writes nothing. `GiveItem` adds 1 to the actor max and sets the actor current equal to it, then calls effects. The client does not call `GiveItem`. It writes the actor u32 pair the way `GiveItem` does, and writes the save s16 pair to the same numbers, so it does not poke one pair and assume the other moved. The save setter's cap applies: the new max is the old max plus 1, at most 50, and the new current equals that max. A vessel when max is already 50 still counts as granted. If current is below 50 it is filled to 50. No chest fanfare plays. BizHawk shows `Received Life Vessel` instead.
+
+An item with no grant yet stays at the front of the queue. The client logs that once and waits. A later item is not granted ahead of it. A stack that is only temporarily full waits the same way, without counting the item. Life Vessel does not do that: the HP cap does not open up again, and the pool is sized around that cap.
+
+The sync routine between the actor HP pair and the save HP pair is still unidentified. The client writes both pairs itself.

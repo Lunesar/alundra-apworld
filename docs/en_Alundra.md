@@ -1,6 +1,6 @@
 # Alundra
 
-Find the crests, open Lake Shrine, and defeat Melzas. Generation writes a placement file for the Alundra randomizer. A BizHawk client can log in to the room and report the chest in Lutas's house. It does not grant items yet.
+Find the crests, open Lake Shrine, and defeat Melzas. Generation writes a placement file for the Alundra randomizer. A BizHawk client can log in to the room, report the chest in Lutas's house, and grant a Life Vessel sent from another game.
 
 The randomizer patches a USA 1.1 disc from that file. Hints inside the game are written then, by the randomizer. Archipelago hint points are not shown in the game.
 

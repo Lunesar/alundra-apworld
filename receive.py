@@ -1,21 +1,21 @@
 # Remote items the BizHawk client can grant.
 #
-# Add a function to HANDLERS when another item can be granted. The function
-# returns Hold.NO_ROOM when the item has to wait because its stack is full
-# and room may open later. Otherwise it returns the Grant from finish(),
-# which appends the received-index write. Life Vessel is the only entry.
+# Every item in item.json has a handler. A handler returns Hold.NO_ROOM when
+# the item has to wait because its stack is full and room may open later.
+# Otherwise it returns the Grant from finish(), which appends the
+# received-index write.
 #
 # The watcher grants one item per pass, and only the item at the front of
-# the queue. An item with no handler stays there until one exists.
+# the queue. An item id with no record stays there until one exists.
 
 from __future__ import annotations
 
 import struct
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
-from .data import GAME_DATA, ITEM_ID_BASE
+from .data import GAME_DATA, ITEM_COUNT, ITEM_ID_BASE, UPGRADE_TIER, ItemRecord
 
 # MainRAM offsets. KSEG0 with the top bits dropped. docs/client_memory.md.
 
@@ -52,6 +52,45 @@ INDEX_RECORD_ID = 126
 INDEX_RECORD = INVENTORY + INDEX_RECORD_ID * 4
 INDEX_MAGIC = 0x4150
 MAX_HP = 50
+MAX_MP = 4
+MAX_GOLD = 9999
+MAX_FALCON = 50
+# Key's stack. TryIncrease will not store a quantity above this.
+MAX_STACK = 99
+# Stat block from current MP through the folded falcon total. SAVE_HP ends
+# where this begins, and the inventory records begin where this ends.
+STAT_REST = 0x1DD820
+STAT_REST_SIZE = 14
+# GiveItem's progressive replacement scans item ids through 60.
+_PROGRESSIVE_SCAN = 60
+
+# Used from the bag, so a full stack can open up again. Herbs holds 9. These
+# four cap at 1. The Key holds 99, which is more than the doors in the game,
+# so a full key stack is counted instead of waiting.
+_USED_ONCE = frozenset({
+    "Strength Elixyr",
+    "Magic Elixyr",
+    "Wonder Essence",
+    "Strength Tonic",
+})
+_WAITS_WHEN_FULL = _USED_ONCE | {"Herbs"}
+_GILDER_VALUE = {0x45: 1, 0x46: 5, 0x47: 10, 0x48: 30}
+# ROM max quantity is 0. item.json leaves it off, so the parsed max is 1.
+# GiveItem does not put these in the inventory array.
+_NO_EFFECT_IDS = frozenset({0x00, 0x3A})
+# Current MP, then max MP. Seeds and crystals write this pair.
+SAVE_MP = STAT_REST
+# Gilders s16. AddGold stores 9999 when the sum would pass it.
+SAVE_GOLD = STAT_REST + 4
+# GiveItem increments this u16, then a later routine folds it into the total.
+FALCON_PENDING = STAT_REST + 10
+# Vanilla item-info flag bit 0 (table 0x800BBE50, halfword +2). The randomizer
+# rewrites slot and tier and leaves this bit. Set: FindOwned keeps the item
+# and looks for a higher tier. Clear on the first owned item in the slot: it
+# returns that item and stops. A later item replaces the kept one only when
+# its tier is higher.
+# 0x01-0x1E weapons through the placeholder, Bomb, the spells and rings, Power Glove.
+_KEEP_SCANNING = frozenset([*range(0x01, 0x1F), 0x23, *range(0x2B, 0x39), 0x3B])
 
 # One read, in the order parse_play_state unpacks. The client guards every byte.
 READS: tuple[tuple[int, int], ...] = (
@@ -65,6 +104,8 @@ READS: tuple[tuple[int, int], ...] = (
     (ACTOR_HP, 8),
     (SAVE_HP, 4),
     (INDEX_RECORD, 8),
+    (STAT_REST, STAT_REST_SIZE),
+    (INVENTORY, ITEM_COUNT * 4),
 )
 
 _LIFE_VESSEL = GAME_DATA.item_by_name["Life Vessel"]
@@ -85,6 +126,17 @@ class PlayState:
     save_current: int
     save_max: int
     received_index: int | None
+    # Save MP, gold, the equipped weapon id, the unread halfword at +12, and
+    # the two falcon halfwords. Pending is what GiveItem increments. A later
+    # routine adds it to the total and clears it. The count in use is the sum.
+    mp_current: int = 0
+    mp_max: int = 0
+    gold: int = 0
+    equipped: int = 0
+    stat_gap: int = 0
+    falcon_pending: int = 0
+    falcon_total: int = 0
+    quantities: tuple[int, ...] = field(default_factory=lambda: (0,) * ITEM_COUNT)
 
 
 @dataclass(frozen=True)
@@ -140,6 +192,11 @@ def parse_play_state(read_bytes: Sequence[bytes]) -> PlayState:
     )
     save_current, save_max = struct.unpack("<hh", read_bytes[8])
     actor_current, actor_max = struct.unpack("<II", read_bytes[7])
+    mp_current, mp_max, gold, equipped, stat_gap, falcon_pending, falcon_total = struct.unpack(
+        "<hhhhhHH", read_bytes[10]
+    )
+    inventory = read_bytes[11]
+    quantities = tuple(struct.unpack_from("<h", inventory, index * 4 + 2)[0] for index in range(ITEM_COUNT))
     return PlayState(
         requested_map=requested_map,
         loaded_map=loaded_map,
@@ -153,6 +210,14 @@ def parse_play_state(read_bytes: Sequence[bytes]) -> PlayState:
         save_current=save_current,
         save_max=save_max,
         received_index=decode_index(read_bytes[9]),
+        mp_current=mp_current,
+        mp_max=mp_max,
+        gold=gold,
+        equipped=equipped,
+        stat_gap=stat_gap,
+        falcon_pending=falcon_pending,
+        falcon_total=falcon_total,
+        quantities=quantities,
     )
 
 
@@ -175,7 +240,25 @@ def pack_play_state(state: PlayState) -> tuple[bytes, ...]:
         struct.pack("<II", state.actor_current, state.actor_max),
         struct.pack("<hh", state.save_current, state.save_max),
         index,
+        struct.pack(
+            "<hhhhhHH",
+            state.mp_current,
+            state.mp_max,
+            state.gold,
+            state.equipped,
+            state.stat_gap,
+            state.falcon_pending,
+            state.falcon_total,
+        ),
+        _pack_inventory(state.quantities),
     )
+
+
+def _pack_inventory(quantities: Sequence[int]) -> bytes:
+    # The owned check ignores the first halfword. Tests round-trip it as 0.
+    # The client guards the bytes it actually read.
+    padded = tuple(quantities) + (0,) * (ITEM_COUNT - len(quantities))
+    return b"".join(struct.pack("<hh", 0, qty) for qty in padded[:ITEM_COUNT])
 
 
 # True when a grant can land. Map ids may be 0: once they match, the HUD flag,
@@ -191,7 +274,17 @@ def gameplay_ready(state: PlayState) -> bool:
         return False
     if not 0 <= state.save_current <= state.save_max:
         return False
-    return state.actor_current == state.save_current and state.actor_max == state.save_max
+    if state.actor_current != state.save_current or state.actor_max != state.save_max:
+        return False
+    if not 0 <= state.mp_max <= MAX_MP or not 0 <= state.mp_current <= state.mp_max:
+        return False
+    if not 0 <= state.gold <= MAX_GOLD:
+        return False
+    if state.falcon_pending > MAX_FALCON or state.falcon_total > MAX_FALCON:
+        return False
+    if len(state.quantities) != ITEM_COUNT:
+        return False
+    return all(0 <= qty <= MAX_STACK for qty in state.quantities)
 
 
 def name_for(ap_id: int) -> str:
@@ -215,7 +308,9 @@ def hold_message(hold: Hold, ap_id: int | None) -> str | None:
 
 
 # Append the received-count write and the play state the next watch should see.
-# current and maximum are the HP both pairs hold after the grant.
+# current and maximum are the HP both pairs hold after the grant. changes are
+# the other fields the writes just stored, so the next item does not wait an
+# extra watch for this one to settle.
 def finish(
     state: PlayState,
     name: str,
@@ -223,6 +318,7 @@ def finish(
     current: int,
     maximum: int,
     detail: str = "",
+    **changes: int | tuple[int, ...],
 ) -> Grant:
     if state.received_index is None:
         raise RuntimeError("A grant needs a received index.")
@@ -237,9 +333,45 @@ def finish(
             save_current=current,
             save_max=maximum,
             received_index=index,
+            **changes,
         ),
         detail=detail,
     )
+
+
+def _count(
+    state: PlayState,
+    name: str,
+    effect_writes: tuple[RamWrite, ...] = (),
+    detail: str = "",
+    **changes: int | tuple[int, ...],
+) -> Grant:
+    return finish(state, name, effect_writes, state.save_current, state.save_max, detail, **changes)
+
+
+def _hp_writes(current: int, maximum: int) -> tuple[RamWrite, ...]:
+    return (
+        RamWrite(ACTOR_HP, struct.pack("<II", current, maximum)),
+        RamWrite(SAVE_HP, struct.pack("<hh", current, maximum)),
+    )
+
+
+def _raise_and_fill(maximum: int, cap: int) -> tuple[int, int]:
+    # GiveItem fills current to the (possibly raised) max.
+    if maximum < cap:
+        maximum += 1
+    return maximum, maximum
+
+
+def _with_quantity(state: PlayState, item_id: int, quantity: int) -> tuple[int, ...]:
+    quantities = list(state.quantities)
+    quantities[item_id] = quantity
+    return tuple(quantities)
+
+
+def _quantity_write(item_id: int, quantity: int) -> RamWrite:
+    # The s16 only. A word write would clear the next record's first halfword.
+    return RamWrite(INVENTORY + item_id * 4 + 2, struct.pack("<h", quantity))
 
 
 def grant_life_vessel(state: PlayState) -> Grant:
@@ -257,29 +389,219 @@ def grant_life_vessel(state: PlayState) -> Grant:
     leaving it queued would block every later item. A stack that can shrink
     returns Hold.NO_ROOM instead, and the count stays put.
     """
-    maximum = state.save_max
-    current = state.save_current
-    if maximum < MAX_HP:
-        maximum += 1
-        current = maximum
-    else:
-        current = maximum
-    writes: list[RamWrite] = []
+    current, maximum = _raise_and_fill(state.save_max, MAX_HP)
+    writes: tuple[RamWrite, ...] = ()
     detail = ""
     if current != state.save_current or maximum != state.save_max:
-        writes.append(RamWrite(ACTOR_HP, struct.pack("<II", current, maximum)))
-        writes.append(RamWrite(SAVE_HP, struct.pack("<hh", current, maximum)))
+        writes = _hp_writes(current, maximum)
     else:
         detail = "Health is already at maximum"
-    return finish(state, _LIFE_VESSEL.name, tuple(writes), current, maximum, detail)
+    return finish(state, _LIFE_VESSEL.name, writes, current, maximum, detail)
 
 
-# ap id -> grant. Life Vessel is the only one. A handler returns Hold.NO_ROOM
+def _grant_gold(state: PlayState, item: ItemRecord) -> Grant:
+    # AddGold stores 9999 when the sum would pass it. A pile past that is counted.
+    total = state.gold + _GILDER_VALUE[item.in_game_id]
+    if total > MAX_GOLD:
+        total = MAX_GOLD
+    if total == state.gold:
+        return _count(state, item.name, detail="Gilders are already at maximum")
+    return _count(state, item.name, (RamWrite(SAVE_GOLD, struct.pack("<h", total)),), gold=total)
+
+
+def _grant_falcon(state: PlayState, item: ItemRecord) -> Grant:
+    # GiveItem adds 1 to pending and caps that halfword at 50, then ORs 0x400
+    # into 0x801DD3E8. That bit is not a named flag, so it is not written.
+    # Readers add pending to the folded total. Nothing stores a smaller sum,
+    # so a falcon at 50 is counted and the queue moves.
+    if state.falcon_pending + state.falcon_total >= MAX_FALCON:
+        return _count(state, item.name, detail="Falcons are already at maximum")
+    pending = state.falcon_pending + 1
+    return _count(
+        state,
+        item.name,
+        (RamWrite(FALCON_PENDING, struct.pack("<H", pending)),),
+        falcon_pending=pending,
+    )
+
+
+def _grant_magic_seed(state: PlayState, item: ItemRecord) -> Grant:
+    # Adds 1 to max MP, stores 4 when the sum would pass it, and fills current
+    # to that max. The cap does not open again, so a seed at 4 is counted.
+    current, maximum = _raise_and_fill(state.mp_max, MAX_MP)
+    writes: tuple[RamWrite, ...] = ()
+    detail = ""
+    if current != state.mp_current or maximum != state.mp_max:
+        writes = (RamWrite(SAVE_MP, struct.pack("<hh", current, maximum)),)
+    else:
+        detail = "Magic is already at maximum"
+    return _count(state, item.name, writes, detail, mp_current=current, mp_max=maximum)
+
+
+def _mp_fill(state: PlayState, item: ItemRecord, current: int) -> Grant:
+    return _count(
+        state,
+        item.name,
+        (RamWrite(SAVE_MP, struct.pack("<hh", current, state.mp_max)),),
+        mp_current=current,
+    )
+
+
+def _grant_clamped_mp(state: PlayState, item: ItemRecord, current: int) -> Grant:
+    # Already at the clamp: count it and leave MP alone. An extra crystal must
+    # not sit in front of the queue.
+    if current == state.mp_current:
+        return _count(state, item.name, detail="Magic is already at maximum")
+    return _mp_fill(state, item, current)
+
+
+def _grant_small_crystal(state: PlayState, item: ItemRecord) -> Grant:
+    # Adds 1 to current MP and clamps to max.
+    current = state.mp_current + 1
+    if current > state.mp_max:
+        current = state.mp_max
+    return _grant_clamped_mp(state, item, current)
+
+
+def _grant_large_crystal(state: PlayState, item: ItemRecord) -> Grant:
+    return _grant_clamped_mp(state, item, state.mp_max)
+
+
+def _grant_heal(state: PlayState, item: ItemRecord, amount: int) -> Grant:
+    # The pickup is consumed either way. Past max HP the heal is counted and
+    # both pairs stay where they are.
+    current = state.save_current + amount
+    if current > state.save_max:
+        current = state.save_max
+    if current == state.save_current:
+        return _count(state, item.name, detail="Health is already at maximum")
+    return finish(state, item.name, _hp_writes(current, state.save_max), current, state.save_max)
+
+
+def _grant_dew(state: PlayState, item: ItemRecord) -> Grant:
+    return _grant_heal(state, item, 2)
+
+
+def _grant_drop(state: PlayState, item: ItemRecord) -> Grant:
+    # max >> 2, and 1 when that is 0. Max is 1..50 here, so the sign fixup
+    # in the handler does not apply.
+    amount = state.save_max // 4
+    if amount <= 0:
+        amount = 1
+    return _grant_heal(state, item, amount)
+
+
+def _grant_water(state: PlayState, item: ItemRecord) -> Grant:
+    # max / 2, and 5 when that is below 5.
+    amount = state.save_max // 2
+    if amount < 5:
+        amount = 5
+    return _grant_heal(state, item, amount)
+
+
+def _best_owned(state: PlayState, slot: int) -> ItemRecord | None:
+    # FindOwnedItemOfBestTierForSlot. Slot 32 and above returns -1. The first
+    # owned item in the slot is kept, and returned immediately when its flag
+    # bit 0 is clear. A later item replaces it only when the tier is higher.
+    if slot >= 32:
+        return None
+    best: ItemRecord | None = None
+    for item in GAME_DATA.items:
+        if item.slot_id != slot or state.quantities[item.in_game_id] <= 0:
+            continue
+        if best is None and item.in_game_id not in _KEEP_SCANNING:
+            return item
+        if best is None or item.tier > best.tier:
+            best = item
+    return best
+
+
+def _item_for_tier(slot: int, tier: int) -> ItemRecord | None:
+    # The hook scans ids 0 through 60 for this slot and tier. An upgrade row
+    # is tier 64. Storing one would make FindOwned prefer it over Legend Sword.
+    if tier == UPGRADE_TIER:
+        return None
+    for item in GAME_DATA.items[: _PROGRESSIVE_SCAN + 1]:
+        if item.slot_id == slot and item.tier == tier:
+            return item
+    return None
+
+
+def _grant_upgrade(state: PlayState, item: ItemRecord) -> Grant:
+    # Nothing owned: the tier-0 item. Otherwise the best tier plus one. No such
+    # item means the top tier is already owned. Count it and leave the upgrade
+    # row at 0. The name is the item that was written, or the upgrade itself
+    # when nothing was.
+    best = _best_owned(state, item.slot_id)
+    found = _item_for_tier(item.slot_id, 0 if best is None else best.tier + 1)
+    if found is None:
+        if best is None:
+            return _count(state, item.name, detail="No further tier")
+        return _count(state, item.name, detail=f"Already carrying {best.name}")
+    return _grant_inventory(state, found)
+
+
+def _waits_when_full(item: ItemRecord) -> bool:
+    # A unique at 1 never leaves, so a duplicate has to be counted or the
+    # queue stops. The same is true of a 99th Key.
+    return item.name in _WAITS_WHEN_FULL
+
+
+def _grant_inventory(state: PlayState, item: ItemRecord) -> Grant | Hold:
+    owned = state.quantities[item.in_game_id]
+    if owned >= item.max_quantity:
+        if _waits_when_full(item):
+            return Hold.NO_ROOM
+        return _count(state, item.name, detail=f"Already carrying {item.name}")
+    quantity = owned + 1
+    return _count(
+        state,
+        item.name,
+        (_quantity_write(item.in_game_id, quantity),),
+        quantities=_with_quantity(state, item.in_game_id, quantity),
+    )
+
+
+def _grant_record(state: PlayState, item: ItemRecord) -> Grant | Hold:
+    item_id = item.in_game_id
+    if item_id in _GILDER_VALUE:
+        return _grant_gold(state, item)
+    if item_id == 0x4F:
+        return _grant_falcon(state, item)
+    if item_id == 0x50:
+        return _grant_magic_seed(state, item)
+    if item_id == 0x51:
+        return _grant_small_crystal(state, item)
+    if item_id == 0x52:
+        return _grant_large_crystal(state, item)
+    if item_id == 0x53:
+        return grant_life_vessel(state)
+    if item_id == 0x54:
+        return _grant_dew(state, item)
+    if item_id == 0x55:
+        return _grant_drop(state, item)
+    if item_id == 0x56:
+        return _grant_water(state, item)
+    if item_id in _NO_EFFECT_IDS:
+        return _count(state, item.name)
+    if item.tier == UPGRADE_TIER:
+        return _grant_upgrade(state, item)
+    return _grant_inventory(state, item)
+
+
+# ap id -> grant. One handler per item.json id. A handler returns Hold.NO_ROOM
 # when it must wait, and otherwise a Grant from finish().
 Handler = Callable[[PlayState], Grant | Hold]
-HANDLERS: dict[int, Handler] = {
-    _LIFE_VESSEL.ap_id: grant_life_vessel,
-}
+
+
+def _bind(item: ItemRecord) -> Handler:
+    def grant(state: PlayState) -> Grant | Hold:
+        return _grant_record(state, item)
+
+    return grant
+
+
+HANDLERS: dict[int, Handler] = {item.ap_id: _bind(item) for item in GAME_DATA.items}
 
 
 # The item at received_index, or None when the count is missing or already caught up.

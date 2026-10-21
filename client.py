@@ -3,7 +3,7 @@
 Archipelago ships the Lua connector (`data/lua/connector_bizhawk_generic.lua`).
 This module is the handler that connector talks to. It claims a PlayStation
 image, logs in to a room, reports locations listed in ``checks.py``, and
-grants a Life Vessel the server sends from another game.
+grants an item the server sends from another game.
 """
 
 from __future__ import annotations

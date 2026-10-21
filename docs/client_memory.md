@@ -56,8 +56,8 @@ There is no separate "collected items" bitfield in work RAM. Owning an item mean
 | +8 | `0x801DD824` | s16 | Gilders. New-game gold store (`0x8004F60C`). Values above 9999 are stored as 9999. |
 | +10 | `0x801DD826` | s16 | Equipped weapon item id. `0x8004FB28` writes it only for -1 or for ids 1..6. |
 | +12 | `0x801DD828` | s16 | Written by `0x8004FB80`, which has no direct callers. Meaning **TBD**. |
-| +14 | `0x801DD82A` | u16 | Gilded Falcon count. The falcon give path adds 1 and caps at 50. Not an inventory quantity. |
-| +16 | `0x801DD82C` | — | Not written by inventory init. **TBD**. |
+| +14 | `0x801DD82A` | u16 | Gilded Falcon pending. `0x8004FDB4` adds to it and caps it at 50, then ORs `0x400` into the word at `0x801DD3E8`. That bit is not a named flag. |
+| +16 | `0x801DD82C` | u16 | Gilded Falcon total. `0x8004FE04` adds pending into this, caps the result at 50, and clears pending. Readers use pending + total. Nothing stores a smaller sum. |
 
 `TryIncrease` does not equip anything. New game grants the starting gear and then calls `0x8004FB28` with item id 1 so the dagger is in hand. A client that only increments a weapon's quantity has granted the weapon; it has not equipped it.
 
@@ -80,11 +80,11 @@ Stack sizes come from the ROM item-info table, not from the save. Table at `0x80
 | Offset | Type | Meaning |
 | --- | --- | --- |
 | +0 | u16 | Slot id (`item.json` `"slot"`) |
-| +2 | u16 | Bit 0 set: `FindOwned` keeps scanning this slot for a higher tier. Bit 0 clear: it returns this item immediately. |
+| +2 | u16 | Bit 0 set: `FindOwned` keeps this item and looks for a higher tier. Bit 0 clear on the first owned item in the slot: it returns that item and stops. A later item replaces the kept one only when its tier is higher. |
 | +4 | u16 | Tier |
 | +6 | s16 | Max quantity. Herbs is 9, the Key is 99, a normal unique item is 1. |
 
-Items with max quantity 0 (gilder pickups, Gilded Falcon, Magic Seed, the three life pickups, Life Vessel) never stick in the inventory array. `TryIncrease` sees quantity 0 equal to max 0 and does not increment. They are granted by the paths in the next section.
+Items with max quantity 0 (Nothing, item `0x3A`, the gilder pickups, Gilded Falcon, Magic Seed, the two crystals, the three life pickups, Life Vessel) never stick in the inventory array. `TryIncrease` sees quantity 0 equal to max 0 and does not increment. They are granted by the paths in the next section.
 
 ## What "give item" means
 
@@ -94,7 +94,7 @@ Two different operations, and they are not interchangeable.
 
 **The game's give routine.** `TryIncrease` at `0x8004FBE4`, item id in `a0`. If quantity is already equal to the max in the item-info table it returns the current quantity and writes nothing. Otherwise it stores quantity + 1 and returns that. New game grants starting items by calling this, not by writing the s16 itself.
 
-On a randomized image the progressive patch overwrites the two instructions at `0x8004FBF4` with a call that may replace `a0`/`a1` with the next tier before the increment. The entry point stays `0x8004FBE4`. Calling it is how an upgrade id becomes a real sword, flail, bow, armor, spell, or boots. A raw quantity write skips that.
+On a randomized image the progressive patch overwrites the two instructions at `0x8004FBF4` with a call that may replace `a0`/`a1` with the next tier before the increment. The entry point stays `0x8004FBE4`. Calling it is how an upgrade id becomes a real sword, flail, bow, armor, spell, or boots. A raw quantity write of the upgrade id skips that, and an owned upgrade row outranks the top real tier in `FindOwned`. The connector cannot enter MIPS, so the client performs that replacement itself and writes the resolved item's quantity. See Receiving a remote item.
 
 `TryIncrease` does not play the chest fanfare. The routine that does, and that also handles the items `TryIncrease` cannot represent, is `GiveItem` at `0x800344D4`. Its only caller (`0x8007EB4C`) passes:
 
@@ -107,24 +107,19 @@ On a randomized image the progressive patch overwrites the two instructions at `
 | --- | --- |
 | `0x45`–`0x48` (1 / 5 / 10 / 30 Gilder) | `AddGold` at `0x8004F668` with `a0` = 1, 5, 10, or 30. Adds to the gilders s16 and caps at 9999. No inventory write. |
 | `0x49`–`0x4E` (Sluice Key through Zolist Stone) | `TryIncrease` |
-| `0x4F` Gilded Falcon | Adds 1 to the u16 at `0x801DD82A`, caps at 50. The tail of that function (`0x8004FDB4`) loads another word; what it does with it is **TBD**. |
+| `0x4F` Gilded Falcon | Adds 1 to the pending u16 at `0x801DD82A` and caps that halfword at 50. Then ORs `0x400` into the word at `0x801DD3E8`. The folded total is the u16 at `0x801DD82C`. |
 | `0x50` Magic Seed | Adds 1 to max MP (cap 4) and sets current MP to that max, then calls effect routines. |
 | `0x51` Small Crystal | Adds 1 to current MP, clamped to max MP, then calls effect routines. |
 | `0x52` Large Crystal | Sets current MP to max MP, then calls effect routines. |
 | `0x53` Life Vessel | Adds 1 to the u32 at `0x801AC710` and sets the u32 at `0x801AC70C` equal to it, then calls effect routines. |
 | `0x54` Dew of Life | Adds 2 to the u32 at `0x801AC70C`, clamped to the u32 at `0x801AC710`. No effect call in this handler. |
-| `0x55` Drop of Life, `0x56` Water of Life | Edit that same u32 pair, then call an effect routine. Water's handler clamps one computed value at 5. The exact arithmetic is **TBD**. |
+| `0x55` Drop of Life | Adds max HP / 4 to the u32 at `0x801AC70C`, at least 1, and clamps to the u32 at `0x801AC710`. Then calls an effect routine. |
+| `0x56` Water of Life | Adds max HP / 2 to that current HP, at least 5, and clamps to max. Then calls an effect routine. |
 | Any other id, including crests and keys | `TryIncrease` |
 
 The u32 pair at `0x801AC70C` / `0x801AC710` is not the save HP s16 pair at `0x801DD81C` / `0x801DD81E`. Life Vessel does not call the HP setters. How the two pairs stay in sync is **TBD**. Do not poke one and assume the other moved.
 
-For a client, the grant that matches "the player now has the item" without depending on a map being on screen:
-
-- Ordinary item, including a progressive upgrade id: call `0x8004FBE4` with the item id. A quantity write is equivalent only when the id is not an upgrade id and the current quantity is below max.
-- Gilders: call `0x8004F668` or add to the s16 at `0x801DD824` (cap 9999).
-- Falcon: add 1 to the u16 at `0x801DD82A` (cap 50).
-- Magic Seed / crystals: the MP s16 updates above. Calling `GiveItem` also runs effect code.
-- Life Vessel / Dew / Drop / Water: only the actor u32 pair is understood, and only Dew and Life Vessel are fully specified. Calling `GiveItem` for these runs effect code. The remote Life Vessel grant writes both HP pairs to the same numbers and does not call `GiveItem`. See Receiving a remote item.
+For a client that cannot enter MIPS, write the stores above and skip the effect calls. The BizHawk client does that for every id in `item.json`. Which bytes move, which caps are counted, and which full stacks wait are in Receiving a remote item.
 
 `GiveItem` itself is the wrong call while a map is loading, because of those effect calls. `TryIncrease`, `AddGold`, and the s16 stores do not call them. They are also what new game uses before any map is running.
 
@@ -244,7 +239,7 @@ Clear flags for Lars Crypt, the Coastal Cave, the Reptile Lair, the Great Tree, 
 
 Those two words are equal again as soon as the copy happens, which is at the start of the load, not at the end. Inequality is not a "still loading" latch. A fade byte is **TBD**. The menu and text words the client waits on are in Receiving a remote item.
 
-Grants that are only `TryIncrease`, `AddGold`, or an s16/u16 store do not wait on the map. They are safe in the same way new game is, which runs them before the map starts. Do not call `GiveItem` from the client. Its effect calls are unsafe while a map is loading, and the connector cannot enter MIPS. A Life Vessel grant writes the HP words, and only while the menu and the NPC text box are closed. See Receiving a remote item.
+Grants that are only `TryIncrease`, `AddGold`, or an s16/u16 store do not wait on the map. They are safe in the same way new game is, which runs them before the map starts. Do not call `GiveItem` from the client. Its effect calls are unsafe while a map is loading, and the connector cannot enter MIPS. The client writes the stores itself, and it waits on the same gate for every remote item. See Receiving a remote item.
 
 Live X/Y/Z are not the save spawn words. The spawn-apply path scales them before storing elsewhere (`X` becomes `((x * 3) << 3) + 12`, shifted up 16 bits). The live coordinate addresses and the scale for Y/Z are only partly visible and are **TBD**. A client granting items does not need them.
 
@@ -279,13 +274,29 @@ The client grants one item per watch, and only when the previous watch saw the s
 | Menu | `0x801531BC` | `0` | `1` | `0` |
 
 - Save max HP is outside 1..50, save current HP is outside 0..max, or the actor u32 pair at `0x801AC70C` / `0x801AC710` does not equal the save s16 pair.
+- Save max MP is outside 0..4, or save current MP is outside 0..max.
+- Gilders are outside 0..9999.
+- Falcon pending or falcon total is above 50.
+- Any inventory quantity for item ids 0..89 is outside 0..99.
 
 `0x800DC4B8` does not change when the menu opens or when NPC text is open, so the client does not read it. `0x8010755C` stays `0` at the start of NPC text and turns on only after the box is already up, so the client does not read that either. A fade byte, a control-lock bit, and a forced-sequence bit are still **TBD**.
 
-The write is a guarded compare of every byte just read. A load that changes any of them fails the write, and the same item is tried again. The count moves only together with the item's own bytes.
+The write is a guarded compare of every byte just read. That includes the 14 bytes at `0x801DD820` (current MP, max MP, gilders, equipped weapon, the unread halfword at +12, falcon pending, falcon total) and the 90 inventory records at `0x801DD82E` (360 bytes). The quantity is the s16 at record + 2. The first halfword of each record is guarded and is not part of the play state. A load that changes any guarded byte fails the write, and the same item is tried again. The count moves only together with the item's own bytes.
 
-Life Vessel (`0x53`) does not go through `TryIncrease`. Its max quantity is 0, so that call writes nothing. `GiveItem` adds 1 to the actor max and sets the actor current equal to it, then calls effects. The client does not call `GiveItem`. It writes the actor u32 pair the way `GiveItem` does, and writes the save s16 pair to the same numbers, so it does not poke one pair and assume the other moved. The save setter's cap applies: the new max is the old max plus 1, at most 50, and the new current equals that max. A vessel when max is already 50 still counts as granted. If current is below 50 it is filled to 50. No chest fanfare plays. BizHawk shows `Received Life Vessel` instead.
+The client does not call `GiveItem` or `TryIncrease`. It writes the bytes those routines would store and skips their effect calls. No chest fanfare plays. BizHawk shows `Received <name>`. The name is the item that was written. A sword upgrade that became the Fiend Blade shows `Received Fiend Blade`. When the top tier is already owned, the name stays the upgrade. The log can add a suffix, such as `Already carrying Legend Sword`. The toast does not show that suffix.
 
-An item with no grant yet stays at the front of the queue. The client logs that once and waits. A later item is not granted ahead of it. A stack that is only temporarily full waits the same way, without counting the item. Life Vessel does not do that: the HP cap does not open up again, and the pool is sized around that cap.
+| Ids | What is written | When it waits |
+| --- | --- | --- |
+| Inventory item with max quantity at least 1, other than the rows below | Quantity s16 at `0x801DD830 + id*4`, plus 1. Two bytes, so the next record's first halfword is left alone. Nothing is equipped. | Herbs (max 9), Strength Tonic, Strength Elixyr, Magic Elixyr, and Wonder Essence wait when quantity is already at max. Those are used from the bag. The Key caps at 99, and a full stack is counted. A unique already at 1 is counted and the quantity is left alone. |
+| Tier 64: sword, flail, bow, armor, the four magic upgrades, boots | The next real tier's quantity. Nothing owned in the slot selects tier 0. Otherwise the best owned tier comes from `FindOwnedItemOfBestTierForSlot`, and the grant is the first id in 0..60 with that slot and best tier + 1. Slot and tier come from `item.json`. Flag bit 0 comes from the vanilla item-info halfword at +2, which the randomizer does not patch. | Never. If that next item is already owned, the receipt is counted. If no further tier exists, the receipt is counted and the upgrade row stays at quantity 0. |
+| `0x45`–`0x48` (1 / 5 / 10 / 30 Gilder) | Add that amount to the s16 at `0x801DD824`. A sum past 9999 is stored as 9999. | Never. Already at 9999 is counted and the purse is left alone. |
+| `0x4F` Gilded Falcon | Add 1 to the pending u16 at `0x801DD82A`. The total at `0x801DD82C` is not rewritten. The `0x400` bit is not written. | Never. Pending plus total is the count readers use. At 50 the falcon is counted, because nothing stores a smaller sum. |
+| `0x50` Magic Seed | Add 1 to max MP, cap 4, and set current MP to that max. One 4-byte write at `0x801DD820`. | Never. At 4 the seed is counted. If current is already 4, the only write is the received count. |
+| `0x51` Small Crystal, `0x52` Large Crystal | Small adds 1 to current MP, clamped to max. Large sets current MP to max MP. `item.json` names these Item `0x51` and Item `0x52`. Their ROM max quantity is 0, so they are not inventory rows. | Never. Already full is counted and MP is left alone. |
+| `0x53` Life Vessel | Add 1 to max HP, cap 50, and set current HP to that max. The actor u32 pair and the save s16 pair are both written to those numbers. | Never. At 50 the vessel is counted. If current is below 50 it is filled to 50. |
+| `0x54` Dew, `0x55` Drop, `0x56` Water | Heal current HP and write both pairs to the same numbers. Dew adds 2. Drop adds max/4, at least 1. Water adds max/2, at least 5. The result clamps to max. `item.json` names these Item `0x54`, Item `0x55`, and Item `0x56`. | Never. Already at max HP is counted and both pairs are left alone. |
+| `0x00` Nothing, `0x3A` | No inventory write. ROM max quantity is 0. `item.json` omits max on `0x3A`, so the parsed max is 1, and that number is not used. | Never. The receipt is counted so the queue moves. |
+
+An item id with no `item.json` record stays at the front of the queue. The client logs that once and waits. A later item is not granted ahead of it. A stack that is only temporarily full waits the same way, without counting the item. Life Vessel, Magic Seed, Gilded Falcon, the two crystals, gilders, and Dew, Drop, and Water do not wait: past the cap they are counted and the stored value stays clamped.
 
 The sync routine between the actor HP pair and the save HP pair is still unidentified. The client writes both pairs itself.

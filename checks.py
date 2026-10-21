@@ -1,16 +1,19 @@
 # Locations the BizHawk client can report as checked.
 #
-# A taken chest is one bit in the event-flag array. The bit index is the event
-# code that chest passes to FlagOn, stored on the item source as eventCode.
+# A taken check is one bit in the event-flag array. The bit index is the event
+# code passed to FlagOn, stored on the item source as eventCode.
 # LOCATION_CHECKS is every loaded source that has one. The watcher reads the
 # bytes that table names and does not need a new code path.
 #
 # The code for a chest that lives in a map entity record is the u16 at
 # record + 0x10. The item id is the byte at record + 0x12, and that byte is
-# the source address only for those entity chests. The two bytes before a
-# shop, Merrick, or NPC script byte are not a flag. A code whose low 15 bits
-# are >= 0x800, or code 0, does not name one chest. Sources with no known
-# code omit eventCode and stay out of this table.
+# the source address only for those entity chests. A one-time shop purchase
+# sets its FlagOn later in the same script, after opcode 0x82. That code is
+# eventCode too. The item id is the argument of 0x82, which is the source
+# address. The two bytes before it are not a flag. Restocking shelves do not
+# set a bit in this array, so they omit eventCode. Merrick trades and NPC
+# gifts do the same. A code whose low 15 bits are >= 0x800, or code 0, does
+# not name one check. Sources with no known code stay out of this table.
 
 from __future__ import annotations
 

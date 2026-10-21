@@ -50,6 +50,31 @@ class CheckTests(unittest.TestCase):
         self.assertLessEqual(origin, EVENT_FLAGS + check.byte_index)
         self.assertGreater(origin + length, EVENT_FLAGS + check.byte_index)
 
+    def test_unique_shop_slots_are_watched(self) -> None:
+        # FlagOn bit set by the purchase script. See docs/client_memory.md.
+        expected = {
+            266: 0x03F1,  # Lurvy's Shop: Item #5 (Leather Armor)
+            267: 0x0454,  # Lurvy's Shop: Item #5 replacement when bought once (Life Vessel)
+            269: 0x0455,  # Lurvy's Shop: repair Broken Armor (Ancient Armor)
+            273: 0x02C4,  # Naomi's Shop: Item #4 (Life Vessel)
+        }
+        by_id = {check.location_id: check for check in LOCATION_CHECKS}
+        for source_id, code in expected.items():
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertEqual(source.event_code, code)
+            self.assertEqual(by_id[source_id].event_code, code)
+            self.assertEqual(by_id[source_id].name, source.pretty_name)
+        leather = by_id[266]
+        # 0x03F1 is bit 1 of flag byte 0x7E, MainRAM 0x1DD3B2.
+        self.assertEqual(leather.byte_index, 0x7E)
+        self.assertEqual(leather.mask, 0x02)
+        # Restocking shelves set no bit in the event-flag array.
+        for source_id in (262, 263, 264, 265, 268, 270, 271, 272):
+            self.assertIsNone(GAME_DATA.source_by_id[source_id].event_code)
+            self.assertNotIn(source_id, by_id)
+        codes = [check.event_code for check in LOCATION_CHECKS]
+        self.assertEqual(len(codes), len(set(codes)))
+
     def test_open_chest_is_the_low_bit(self) -> None:
         lutas = next(row for row in LOCATION_CHECKS if row.location_id == 1)
         origin = lutas.byte_index

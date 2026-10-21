@@ -129,9 +129,20 @@ A taken source is an event-flag bit, not a byte next to the inventory record. Ma
 
 The client watches every source that has `eventCode`. The check name is the source pretty name: the JSON `name`, plus ` (vanillaItem)` when a vanilla item is set. The location id is the source `id`.
 
-A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. Shops, Merrick trades, and NPC gifts store an item id in script bytes, and the two bytes before that id are not a flag. Code 0, and any code whose low 15 bits are `>= 0x800`, is omitted. The key is also omitted when one source's entity records carry two different codes, or when two sources would share one code.
+A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. A shop slot stores the item id as the argument byte of opcode `0x82`. That byte is the source `address`. The two bytes before it are not a flag. Merrick trades and NPC gifts also store an item id in script bytes, and the two bytes before that id are not a flag. Code 0, and any code whose low 15 bits are `>= 0x800`, is omitted. The key is also omitted when one source's entity records carry two different codes, or when two sources would share one code.
 
-Watched locations are the `eventCode` fields in `item_source.json`. These entity chests have no key: Overworld C4 left coast chest (id 33; map 12 `0x06D6`, map 407 `0x0540`), Overworld C4 forest chest (id 36; map 12 `0x06D7`, map 407 `0x0542`), and Fairy Pond's reward chest (id 145, code 0). Shops, Merrick trades, and NPC script gifts have no key. On this disc, no two sources shared one code.
+Watched locations are the `eventCode` fields in `item_source.json`. These entity chests have no key: Overworld C4 left coast chest (id 33; map 12 `0x06D6`, map 407 `0x0540`), Overworld C4 forest chest (id 36; map 12 `0x06D7`, map 407 `0x0542`), and Fairy Pond's reward chest (id 145, code 0). Merrick trades and NPC script gifts have no key. On this disc, no two sources share one code.
+
+A one-time shop purchase sets its flag with opcode `0x05` on the path that has already taken the gilder and called `0x82`. The same script tests that bit, so the shelf does not come back. The client watches the bit the same way it watches a chest. New game does not set these bits. None of them is named in `flags.hpp`.
+
+| Source | Id | Map script | FlagOn | When it is set |
+| --- | --- | --- | --- | --- |
+| Lurvy's Shop: Item #5 (Leather Armor) | 266 | 398 B[5] | `0x03F1` | `0x82` returned success. The script begins with `IfFlagOn 0x03F1` and does not offer the item when the bit is set. |
+| Lurvy's Shop: Item #5 replacement when bought once (Life Vessel) | 267 | 398 B[6] | `0x0454` | After the gilder is taken and `0x82` runs. The script does not test `0x82`'s result. Offered only when `0x03F1` is on and `0x0454` is off. |
+| Naomi's Shop: Item #4 (Life Vessel) | 273 | 258 B[5] | `0x02C4` | After the gilder is taken and `0x82` runs. The script does not test `0x82`'s result. Script B[1] activates the shelf entity only while the bit is off. Shop variants 298 and 302 set the same bit on their own purchase. The randomizer keeps Inoa on map 241, whose shop door is 258, and neutralizes later Inoa variant changes. |
+| Lurvy's Shop: Item obtained after repairing Broken Armor (Ancient Armor) | 269 | 398 C[2] | `0x0455` | After `UseItem` consumes Broken Armor (item `0x21`) and `0x82` gives the repaired item (item `0x13`). Nothing else in `DATAS.BIN` reads or writes this bit. |
+
+Restocking shelves set no bit in the 2048-flag array. Lurvy items 1–4 (ids 262–265), Lurvy's third Item #5 (Wonder Essence, id 268), and Naomi items 1–3 (ids 270–272) only toggle flags whose bit 15 is set (`0x8384` on map 398, `0x81F4` on map 258). Bit 15 selects the array at `0x801E6378`, and the script clears the bit before it returns control. There is no event code to store, so those sources stay out of the watch table.
 
 ### Event-flag encoding
 

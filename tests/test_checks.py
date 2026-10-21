@@ -25,25 +25,40 @@ from alundra.data import GAME_DATA
 
 
 class CheckTests(unittest.TestCase):
-    def test_lutas_house_is_the_only_wired_check(self) -> None:
-        source = GAME_DATA.source_by_pretty_name["Inoa: Chest in Lutas's house (Secret Pass)"]
+    def test_lutas_house_is_present_and_rows_match_sources(self) -> None:
+        expected = [
+            (source.pretty_name, source.id, source.event_code)
+            for source in GAME_DATA.sources
+            if source.event_code is not None
+        ]
         self.assertEqual(
             [(check.name, check.location_id, check.event_code) for check in LOCATION_CHECKS],
-            [(source.pretty_name, source.id, 0x0680)],
+            expected,
         )
-        check = LOCATION_CHECKS[0]
+        lutas = GAME_DATA.source_by_id[1]
+        self.assertEqual(lutas.pretty_name, "Inoa: Chest in Lutas's house (Secret Pass)")
+        self.assertEqual(lutas.event_code, 0x0680)
+        check = next(row for row in LOCATION_CHECKS if row.location_id == lutas.id)
+        self.assertEqual((check.name, check.event_code), (lutas.pretty_name, 0x0680))
         # 0x0680 is bit 0 of flag byte 0xD0, MainRAM 0x1DD404.
         self.assertEqual(check.byte_index, 0xD0)
         self.assertEqual(check.mask, 0x01)
-        self.assertEqual(flag_read(), (EVENT_FLAGS + 0xD0, 1))
+        window = flag_read()
+        self.assertIsNotNone(window)
+        assert window is not None
+        origin, length = window
+        self.assertLessEqual(origin, EVENT_FLAGS + check.byte_index)
+        self.assertGreater(origin + length, EVENT_FLAGS + check.byte_index)
 
     def test_open_chest_is_the_low_bit(self) -> None:
-        origin = LOCATION_CHECKS[0].byte_index
-        self.assertEqual(checked_locations(b"\x00", origin), [])
-        self.assertEqual(checked_locations(b"\xfe", origin), [])
-        self.assertEqual(checked_locations(b"\x01", origin), [LOCATION_CHECKS[0].location_id])
-        self.assertEqual(checked_locations(b"\x81", origin), [LOCATION_CHECKS[0].location_id])
-        self.assertEqual(checked_locations(b"", origin), [])
+        lutas = next(row for row in LOCATION_CHECKS if row.location_id == 1)
+        origin = lutas.byte_index
+        one = (lutas,)
+        self.assertEqual(checked_locations(b"\x00", origin, one), [])
+        self.assertEqual(checked_locations(b"\xfe", origin, one), [])
+        self.assertEqual(checked_locations(b"\x01", origin, one), [lutas.location_id])
+        self.assertEqual(checked_locations(b"\x81", origin, one), [lutas.location_id])
+        self.assertEqual(checked_locations(b"", origin, one), [])
 
     def test_a_second_row_shares_the_read(self) -> None:
         checks = (

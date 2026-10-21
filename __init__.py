@@ -2,8 +2,8 @@
 
 Generation writes a placement seed map. The Alundra randomizer reads that file
 with --placement-in and patches a USA 1.1 disc. This world does not patch the
-disc. The BizHawk client logs in to a room, reports the chest in Lutas's
-house, and grants a Life Vessel sent from another game.
+disc. The BizHawk client logs in to a room, reports chests whose event
+code is known, and grants a Life Vessel sent from another game.
 
 Another slot's item may be placed on an Alundra check. The placement file
 records that item as an object. This slot's own items stay in-game item ids.

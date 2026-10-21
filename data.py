@@ -127,6 +127,7 @@ _ITEM_KEYS = {"name", "maxQuantity", "goldValue", "slot", "tier", "precious"}
 _SOURCE_KEYS = {
     "id", "name", "nodeId", "address", "spriteAddress", "priceAddress",
     "merrickItemAddress", "hints", "vanillaItem", "forbidPreciousItems",
+    "eventCode",
 }
 _NODE_KEYS = {"hints", "graphPos", "shouldHaveUniqueItems"}
 _PATH_KEYS = {"fromId", "toId", "twoWay", "requiredNodes", "requiredItems", "weight"}
@@ -163,6 +164,8 @@ class ItemSourceRecord:
     has_price: bool
     has_merrick: bool
     region_name: str
+    # FlagOn bit index. None when item_source.json omits eventCode.
+    event_code: int | None
 
 
 @dataclass(frozen=True)
@@ -344,6 +347,13 @@ def _parse_item_sources(
         vanilla = entry.get("vanillaItem")
         if vanilla is not None and vanilla not in item_by_name:
             raise AlundraDataError(f"Item source '{label}' has unknown vanilla item '{vanilla}'.")
+        event_code = entry.get("eventCode")
+        if "eventCode" in entry and (
+            not isinstance(event_code, int) or isinstance(event_code, bool) or event_code < 0
+        ):
+            raise AlundraDataError(
+                f"Item source '{label}' eventCode must be a non-negative integer."
+            )
         pretty = f"{label} ({vanilla})" if vanilla else label
         source = ItemSourceRecord(
             id=source_id,
@@ -355,6 +365,7 @@ def _parse_item_sources(
             has_price="priceAddress" in entry,
             has_merrick="merrickItemAddress" in entry,
             region_name=nodes[node_id].region_name,
+            event_code=event_code,
         )
         if source_id in source_by_id:
             raise AlundraDataError(f"Duplicate item source id {source_id}.")

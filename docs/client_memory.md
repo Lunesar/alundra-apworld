@@ -130,15 +130,13 @@ For a client, the grant that matches "the player now has the item" without depen
 
 ## Checked locations (chests and other sources)
 
-A taken source is an event-flag bit, not a byte next to the inventory record. Map scripts turn bits on with opcode `0x05` (`FlagOn`) and test them with `0x30` / `0x31` (`IfFlagOn` / `IfFlagOff`). The same bits are what `flags.hpp` names. `item_source.json` does not store a flag. Its `address` / `spriteAddress` fields are offsets in `DATAS.BIN` where the patch writes the item id, not RAM, and not the checked-bit.
+A taken source is an event-flag bit, not a byte next to the inventory record. Map scripts turn bits on with opcode `0x05` (`FlagOn`) and test them with `0x30` / `0x31` (`IfFlagOn` / `IfFlagOff`). The same bits are what `flags.hpp` names. `item_source.json` stores that bit index as `eventCode` when the code is known, and omits the key when it is unknown. `eventCode` is the bit index passed to `FlagOn`. It is not a RAM address. `address` and `spriteAddress` are offsets in `DATAS.BIN` where the patch writes the item id. The patcher does not read `eventCode`.
 
-Which event code belongs to which location id is **TBD** except the rows below. Do not derive one from the item-id file offset. A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. Shops, Merrick, and NPC gifts store an item id in script bytes, and the two bytes before that id are not a flag. A code whose low 15 bits are `>= 0x800`, or code 0, does not name one chest.
+The client watches every source that has `eventCode`. The check name is the source pretty name: the JSON `name`, plus ` (vanillaItem)` when a vanilla item is set. The location id is the source `id`.
 
-| Location | Source id | Event code | Byte | Bit |
-| --- | --- | --- | --- | --- |
-| Inoa: Chest in Lutas's house (Secret Pass) | 1 | `0x0680` | `0x801DD404` | 0 |
+A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. Shops, Merrick trades, and NPC gifts store an item id in script bytes, and the two bytes before that id are not a flag. Code 0, and any code whose low 15 bits are `>= 0x800`, is omitted. The key is also omitted when one source's entity records carry two different codes, or when two sources would share one code.
 
-The Lutas record is at DATAS.BIN `0x499699C` on USA 1.1. Its contents byte is `0x39` (Secret Pass), at source address `0x49969AE`. The client reports this one location. The other source ids stay **TBD**.
+Watched locations are the `eventCode` fields in `item_source.json`. These entity chests have no key: Overworld C4 left coast chest (id 33; map 12 `0x06D6`, map 407 `0x0540`), Overworld C4 forest chest (id 36; map 12 `0x06D7`, map 407 `0x0542`), and Fairy Pond's reward chest (id 145, code 0). Shops, Merrick trades, and NPC script gifts have no key. On this disc, no two sources shared one code.
 
 ### Event-flag encoding
 

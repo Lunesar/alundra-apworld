@@ -1,15 +1,16 @@
 # Locations the BizHawk client can report as checked.
 #
 # A taken chest is one bit in the event-flag array. The bit index is the event
-# code that chest passes to FlagOn. Add a row to LOCATION_CHECKS when another
-# location's event code is known. The watcher reads the bytes that table names
-# and does not need a new code path.
+# code that chest passes to FlagOn, stored on the item source as eventCode.
+# LOCATION_CHECKS is every loaded source that has one. The watcher reads the
+# bytes that table names and does not need a new code path.
 #
 # The code for a chest that lives in a map entity record is the u16 at
 # record + 0x10. The item id is the byte at record + 0x12, and that byte is
 # the source address only for those entity chests. The two bytes before a
 # shop, Merrick, or NPC script byte are not a flag. A code whose low 15 bits
-# are >= 0x800, or code 0, does not name one chest.
+# are >= 0x800, or code 0, does not name one chest. Sources with no known
+# code omit eventCode and stay out of this table.
 
 from __future__ import annotations
 
@@ -46,18 +47,16 @@ class LocationCheck:
         return 1 << (self.event_code & 7)
 
 
-def _check(name: str, event_code: int) -> LocationCheck:
-    source = GAME_DATA.source_by_pretty_name[name]
-    return LocationCheck(name, source.id, event_code)
+def _checks_from_sources() -> tuple[LocationCheck, ...]:
+    checks: list[LocationCheck] = []
+    for source in GAME_DATA.sources:
+        if source.event_code is None:
+            continue
+        checks.append(LocationCheck(source.pretty_name, source.id, source.event_code))
+    return tuple(checks)
 
 
-# Inoa: Chest in Lutas's house. Entity record at DATAS.BIN 0x499699C on USA 1.1.
-# Contents byte 0x39 (Secret Pass) is source address 0x49969AE. Flag halfword
-# at record + 0x10 is 0x0680, bit 0 of MainRAM 0x1DD404. The location name is
-# the pretty name Archipelago shows, which appends the vanilla item.
-LOCATION_CHECKS: tuple[LocationCheck, ...] = (
-    _check("Inoa: Chest in Lutas's house (Secret Pass)", 0x0680),
-)
+LOCATION_CHECKS: tuple[LocationCheck, ...] = _checks_from_sources()
 
 WATCHED_LOCATION_IDS = frozenset(check.location_id for check in LOCATION_CHECKS)
 

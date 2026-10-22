@@ -75,6 +75,32 @@ class CheckTests(unittest.TestCase):
         codes = [check.event_code for check in LOCATION_CHECKS]
         self.assertEqual(len(codes), len(set(codes)))
 
+    def test_merrick_trades_are_watched(self) -> None:
+        # FlagOn bit set by the spawned trade script on map 134.
+        # See docs/client_memory.md.
+        expected = {
+            254: 0x0599,  # 15 Gilded Falcons (Life Vessel), C[4]
+            255: 0x059A,  # 20 Gilded Falcons (Olga's Ring), C[5]
+            256: 0x059B,  # 25 Gilded Falcons (Life Vessel), C[9]
+            257: 0x059C,  # 30 Gilded Falcons (Silver Armlet), C[6]
+            258: 0x059D,  # 35 Gilded Falcons (Life Vessel), C[10]
+            259: 0x059E,  # 40 Gilded Falcons (Recovery Ring), C[7]
+            260: 0x059F,  # 45 Gilded Falcons (Life Vessel), C[11]
+            261: 0x05A0,  # 50 Gilded Falcons (Spirit Wand), C[8]
+        }
+        by_id = {check.location_id: check for check in LOCATION_CHECKS}
+        for source_id, code in expected.items():
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertEqual(source.event_code, code)
+            self.assertEqual(by_id[source_id].event_code, code)
+            self.assertEqual(by_id[source_id].name, source.pretty_name)
+        first = by_id[254]
+        # 0x0599 is bit 1 of flag byte 0xB3, MainRAM 0x1DD3E7.
+        self.assertEqual(first.byte_index, 0xB3)
+        self.assertEqual(first.mask, 0x02)
+        codes = [check.event_code for check in LOCATION_CHECKS]
+        self.assertEqual(len(codes), len(set(codes)))
+
     def test_open_chest_is_the_low_bit(self) -> None:
         lutas = next(row for row in LOCATION_CHECKS if row.location_id == 1)
         origin = lutas.byte_index

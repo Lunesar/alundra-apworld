@@ -84,6 +84,13 @@ SAVE_MP = STAT_REST
 SAVE_GOLD = STAT_REST + 4
 # GiveItem increments this u16, then a later routine folds it into the total.
 FALCON_PENDING = STAT_REST + 10
+# Event 0x05AA. Bit 2 of this byte, which is bit 0x400 of the word at
+# 0x801DD3E8. GiveItem sets it in the same routine that increments pending.
+# Merrick's talk tests it before he will fold pending into the total.
+# The other bits in the byte are his offer and trade flags, so a grant
+# reads the byte and ORs this mask.
+FALCON_VISIT = 0x1DD3E9
+FALCON_BROUGHT = 0x04
 # Vanilla item-info flag bit 0 (table 0x800BBE50, halfword +2). The randomizer
 # rewrites slot and tier and leaves this bit. Set: FindOwned keeps the item
 # and looks for a higher tier. Clear on the first owned item in the slot: it
@@ -106,6 +113,7 @@ READS: tuple[tuple[int, int], ...] = (
     (INDEX_RECORD, 8),
     (STAT_REST, STAT_REST_SIZE),
     (INVENTORY, ITEM_COUNT * 4),
+    (FALCON_VISIT, 1),
 )
 
 _LIFE_VESSEL = GAME_DATA.item_by_name["Life Vessel"]
@@ -127,8 +135,9 @@ class PlayState:
     save_max: int
     received_index: int | None
     # Save MP, gold, the equipped weapon id, the unread halfword at +12, and
-    # the two falcon halfwords. Pending is what GiveItem increments. A later
-    # routine adds it to the total and clears it. The count in use is the sum.
+    # the two falcon halfwords. Pending is what GiveItem increments. Merrick's
+    # dialog adds it to the total and clears it. falcon_flags is the raw byte
+    # at 0x1DD3E9; bit 2 is event 0x05AA.
     mp_current: int = 0
     mp_max: int = 0
     gold: int = 0
@@ -136,6 +145,7 @@ class PlayState:
     stat_gap: int = 0
     falcon_pending: int = 0
     falcon_total: int = 0
+    falcon_flags: int = 0
     quantities: tuple[int, ...] = field(default_factory=lambda: (0,) * ITEM_COUNT)
 
 
@@ -217,6 +227,7 @@ def parse_play_state(read_bytes: Sequence[bytes]) -> PlayState:
         stat_gap=stat_gap,
         falcon_pending=falcon_pending,
         falcon_total=falcon_total,
+        falcon_flags=read_bytes[12][0],
         quantities=quantities,
     )
 
@@ -251,6 +262,7 @@ def pack_play_state(state: PlayState) -> tuple[bytes, ...]:
             state.falcon_total,
         ),
         _pack_inventory(state.quantities),
+        bytes([state.falcon_flags]),
     )
 
 
@@ -411,17 +423,23 @@ def _grant_gold(state: PlayState, item: ItemRecord) -> Grant:
 
 def _grant_falcon(state: PlayState, item: ItemRecord) -> Grant:
     # GiveItem adds 1 to pending and caps that halfword at 50, then ORs 0x400
-    # into 0x801DD3E8. That bit is not a named flag, so it is not written.
-    # Readers add pending to the folded total. Nothing stores a smaller sum,
-    # so a falcon at 50 is counted and the queue moves.
+    # into the word at 0x801DD3E8. That bit is event 0x05AA. Merrick tests it
+    # before he will count today's falcons, and his dialog then folds pending
+    # into the total. The fold caps the sum at 50, so a falcon at 50 is
+    # counted and the queue moves.
     if state.falcon_pending + state.falcon_total >= MAX_FALCON:
         return _count(state, item.name, detail="Falcons are already at maximum")
     pending = state.falcon_pending + 1
+    flags = state.falcon_flags | FALCON_BROUGHT
+    writes = [RamWrite(FALCON_PENDING, struct.pack("<H", pending))]
+    if flags != state.falcon_flags:
+        writes.append(RamWrite(FALCON_VISIT, bytes([flags])))
     return _count(
         state,
         item.name,
-        (RamWrite(FALCON_PENDING, struct.pack("<H", pending)),),
+        tuple(writes),
         falcon_pending=pending,
+        falcon_flags=flags,
     )
 
 

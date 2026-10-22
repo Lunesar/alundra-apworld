@@ -18,7 +18,9 @@ sys.modules["alundra"] = _package
 from alundra.data import GAME_DATA, ITEM_COUNT, ITEM_ID_BASE
 from alundra.receive import (
     ACTOR_HP,
+    FALCON_BROUGHT,
     FALCON_PENDING,
+    FALCON_VISIT,
     HANDLERS,
     INDEX_MAGIC,
     INDEX_RECORD,
@@ -123,12 +125,15 @@ class ReceiveTests(unittest.TestCase):
                 (INDEX_RECORD, 8),
                 (STAT_REST, 14),
                 (INVENTORY, ITEM_COUNT * 4),
+                (FALCON_VISIT, 1),
             ),
         )
         self.assertEqual(STAT_REST, 0x1DD820)
         self.assertEqual(SAVE_MP, 0x1DD820)
         self.assertEqual(SAVE_GOLD, 0x1DD824)
         self.assertEqual(FALCON_PENDING, 0x1DD82A)
+        self.assertEqual(FALCON_VISIT, 0x1DD3E9)
+        self.assertEqual(FALCON_BROUGHT, 0x04)
         self.assertEqual((TEXT_WINDOW_A, MENU_WINDOW, TEXT_WINDOW_B), (0x107570, 0x107618, 0x1076C0))
         self.assertEqual(MENU_WINDOW - TEXT_WINDOW_A, 0xA8)
         self.assertEqual(TEXT_WINDOW_B - MENU_WINDOW, 0xA8)
@@ -148,6 +153,7 @@ class ReceiveTests(unittest.TestCase):
             stat_gap=7,
             falcon_pending=1,
             falcon_total=2,
+            falcon_flags=0x0A,
             quantities=quantities,
         )
         self.assertEqual(parse_play_state(pack_play_state(state)), state)
@@ -420,21 +426,35 @@ class ReceiveTests(unittest.TestCase):
         self.assertEqual(one.writes[0].data, struct.pack("<h", 11))
 
     def test_falcons_fill_pending_and_count_at_the_cap(self) -> None:
-        grant = grant_of(playing(falcon_pending=3, falcon_total=4), "Gilded Falcon")
+        # 0x02 is event 0x05A9, set at new game. The grant ORs 0x05AA and keeps it.
+        grant = grant_of(playing(falcon_pending=3, falcon_total=4, falcon_flags=0x02), "Gilded Falcon")
         self.assertEqual(grant.next_state.falcon_pending, 4)
         self.assertEqual(grant.next_state.falcon_total, 4)
-        self.assertEqual([write.address for write in grant.writes], [FALCON_PENDING, INDEX_RECORD])
-        self.assertEqual(grant.writes[0].data, struct.pack("<H", 4))
+        self.assertEqual(grant.next_state.falcon_flags, 0x06)
+        self.assertEqual(
+            [(write.address, write.data) for write in grant.writes],
+            [
+                (FALCON_PENDING, struct.pack("<H", 4)),
+                (FALCON_VISIT, bytes([0x06])),
+                (INDEX_RECORD, index_bytes(1)),
+            ],
+        )
+        # Already brought today. Another falcon leaves the flag byte alone.
+        again = grant_of(grant.next_state, "Gilded Falcon")
+        self.assertEqual(again.next_state.falcon_pending, 5)
+        self.assertEqual(again.next_state.falcon_flags, 0x06)
+        self.assertEqual([write.address for write in again.writes], [FALCON_PENDING, INDEX_RECORD])
         for state in (
-            playing(falcon_pending=25, falcon_total=25),
-            playing(falcon_total=50),
-            playing(falcon_pending=50),
+            playing(falcon_pending=25, falcon_total=25, falcon_flags=0x06),
+            playing(falcon_total=50, falcon_flags=0x02),
+            playing(falcon_pending=50, falcon_flags=0x06),
         ):
             capped = grant_of(state, "Gilded Falcon")
             self.assertEqual(capped.detail, "Falcons are already at maximum")
             self.assertEqual([write.address for write in capped.writes], [INDEX_RECORD])
             self.assertEqual(capped.next_state.falcon_pending, state.falcon_pending)
             self.assertEqual(capped.next_state.falcon_total, state.falcon_total)
+            self.assertEqual(capped.next_state.falcon_flags, state.falcon_flags)
 
     def test_magic_seed_fills_current_and_counts_at_the_cap(self) -> None:
         first = grant_of(playing(), "Magic Seed")

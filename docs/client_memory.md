@@ -56,8 +56,8 @@ There is no separate "collected items" bitfield in work RAM. Owning an item mean
 | +8 | `0x801DD824` | s16 | Gilders. New-game gold store (`0x8004F60C`). Values above 9999 are stored as 9999. |
 | +10 | `0x801DD826` | s16 | Equipped weapon item id. `0x8004FB28` writes it only for -1 or for ids 1..6. |
 | +12 | `0x801DD828` | s16 | Written by `0x8004FB80`, which has no direct callers. Meaning **TBD**. |
-| +14 | `0x801DD82A` | u16 | Gilded Falcon pending. `0x8004FDB4` adds to it and caps it at 50, then ORs `0x400` into the word at `0x801DD3E8`. That bit is not a named flag. |
-| +16 | `0x801DD82C` | u16 | Gilded Falcon total. `0x8004FE04` adds pending into this, caps the result at 50, and clears pending. Readers use pending + total. Nothing stores a smaller sum. |
+| +14 | `0x801DD82A` | u16 | Gilded Falcon pending. `0x8004FDB4` adds to it and caps it at 50, then ORs `0x400` into the word at `0x801DD3E8`. That bit is event `0x05AA`, bit 2 of the byte at `0x801DD3E9`. Merrick's talk tests it before folding pending into the total. |
+| +16 | `0x801DD82C` | u16 | Gilded Falcon total. `0x8004FE04` adds pending into this, caps the result at 50, clears pending, and clears `0x05AA`. `GetTotal` at `0x8004FE5C` returns only this halfword. Merrick compares it with 15, 20, 25, 30, 35, 40, 45, 50. The printers at `0x8005620C` and `0x80058BE4` add pending to it. |
 
 `TryIncrease` does not equip anything. New game grants the starting gear and then calls `0x8004FB28` with item id 1 so the dagger is in hand. A client that only increments a weapon's quantity has granted the weapon; it has not equipped it.
 
@@ -131,7 +131,7 @@ The client watches every source that has `eventCode`. The check name is the sour
 
 A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. A shop slot stores the item id as the argument byte of opcode `0x82`. That byte is the source `address`. The two bytes before it are not a flag. Merrick trades and NPC gifts also store an item id in script bytes, and the two bytes before that id are not a flag. Code 0, and any code whose low 15 bits are `>= 0x800`, is omitted. The key is also omitted when one source's entity records carry two different codes, or when two sources would share one code.
 
-Watched locations are the `eventCode` fields in `item_source.json`. These entity chests have no key: Overworld C4 left coast chest (id 33; map 12 `0x06D6`, map 407 `0x0540`), Overworld C4 forest chest (id 36; map 12 `0x06D7`, map 407 `0x0542`), and Fairy Pond's reward chest (id 145, code 0). Merrick trades and NPC script gifts have no key. On this disc, no two sources share one code.
+Watched locations are the `eventCode` fields in `item_source.json`. These entity chests have no key: Overworld C4 left coast chest (id 33; map 12 `0x06D6`, map 407 `0x0540`), Overworld C4 forest chest (id 36; map 12 `0x06D7`, map 407 `0x0542`), and Fairy Pond's reward chest (id 145, code 0). NPC script gifts have no key. On this disc, no two sources share one code.
 
 A one-time shop purchase sets its flag with opcode `0x05` on the path that has already taken the gilder and called `0x82`. The same script tests that bit, so the shelf does not come back. The client watches the bit the same way it watches a chest. New game does not set these bits. None of them is named in `flags.hpp`.
 
@@ -143,6 +143,25 @@ A one-time shop purchase sets its flag with opcode `0x05` on the path that has a
 | Lurvy's Shop: Item obtained after repairing Broken Armor (Ancient Armor) | 269 | 398 C[2] | `0x0455` | After `UseItem` consumes Broken Armor (item `0x21`) and `0x82` gives the repaired item (item `0x13`). Nothing else in `DATAS.BIN` reads or writes this bit. |
 
 Restocking shelves set no bit in the 2048-flag array. Lurvy items 1–4 (ids 262–265), Lurvy's third Item #5 (Wonder Essence, id 268), and Naomi items 1–3 (ids 270–272) only toggle flags whose bit 15 is set (`0x8384` on map 398, `0x81F4` on map 258). Bit 15 selects the array at `0x801E6378`, and the script clears the bit before it returns control. There is no event code to store, so those sources stay out of the watch table.
+
+A Merrick trade sets its flag in the trade script he spawns, on map 134. Talk script C[1], and C[2] once a trade is already underway, spawns one trade entity and then sets latch `0x8065`. The trade script waits for that latch, calls `FlagOn` for its own bit, plays text 145, and calls `0x82`. The `FlagOn` runs before `0x82`, and the script does not test `0x82`'s result. `0x8065` has bit 15 set, so it lives in the array at `0x801E6378`. The trade script clears it after the give, and other maps use the same latch. It does not name a trade.
+
+The eight bits are `Flag(0xD3E7, 1)` through `Flag(0xD3E7, 7)`, then `Flag(0xD3E8, 0)`. New game does not set them. The new-game Merrick bits are `0x0596`, `0x0597`, `0x0598`, and `0x05A9`. None of the trade bits is named in `flags.hpp`. A walk that starts at each script entry finds each `FlagOn` in exactly one script, the trade script below. `0x059A`, `0x059C`, `0x059E`, and `0x059F` are also tested by B[2], B[3], B[4], and B[1]. Those scripts activate a prop for a later talk and do not give the item again. `0x05A0` is also tested by C[1] and C[2]: when it is on, Merrick uses the finished dialog (text 150) and offers no further trade.
+
+`0x05A1` through `0x05A7` choose which trade entity to spawn. Map scripts only test them, and only on map 134. The completion bits are the eight codes in the table.
+
+A linear walk of a code blob reports `FlagOn 0x05A0` at map 49 address `0xC15FE3`. That halfword is C[19]'s script offset. The C table base there is `0xC15F74`, and `0xC15F74 + 0x05A0` is the script. The same halfword runs sit in other maps' script tables. A walk from each script entry reaches `FlagOn` for these eight codes only in the map 134 trade scripts.
+
+| Source | Id | Map script | FlagOn |
+| --- | --- | --- | --- |
+| Merrick's Shop: Item traded for 15 Gilded Falcons (Life Vessel) | 254 | 134 C[4] | `0x0599` |
+| Merrick's Shop: Item traded for 20 Gilded Falcons (Olga's Ring) | 255 | 134 C[5] | `0x059A` |
+| Merrick's Shop: Item traded for 25 Gilded Falcons (Life Vessel) | 256 | 134 C[9] | `0x059B` |
+| Merrick's Shop: Item traded for 30 Gilded Falcons (Silver Armlet) | 257 | 134 C[6] | `0x059C` |
+| Merrick's Shop: Item traded for 35 Gilded Falcons (Life Vessel) | 258 | 134 C[10] | `0x059D` |
+| Merrick's Shop: Item traded for 40 Gilded Falcons (Recovery Ring) | 259 | 134 C[7] | `0x059E` |
+| Merrick's Shop: Item traded for 45 Gilded Falcons (Life Vessel) | 260 | 134 C[11] | `0x059F` |
+| Merrick's Shop: Item traded for 50 Gilded Falcons (Spirit Wand) | 261 | 134 C[8] | `0x05A0` |
 
 ### Event-flag encoding
 
@@ -292,7 +311,7 @@ The client grants one item per watch, and only when the previous watch saw the s
 
 `0x800DC4B8` does not change when the menu opens or when NPC text is open, so the client does not read it. `0x8010755C` stays `0` at the start of NPC text and turns on only after the box is already up, so the client does not read that either. A fade byte, a control-lock bit, and a forced-sequence bit are still **TBD**.
 
-The write is a guarded compare of every byte just read. That includes the 14 bytes at `0x801DD820` (current MP, max MP, gilders, equipped weapon, the unread halfword at +12, falcon pending, falcon total) and the 90 inventory records at `0x801DD82E` (360 bytes). The quantity is the s16 at record + 2. The first halfword of each record is guarded and is not part of the play state. A load that changes any guarded byte fails the write, and the same item is tried again. The count moves only together with the item's own bytes.
+The write is a guarded compare of every byte just read. That includes the 14 bytes at `0x801DD820` (current MP, max MP, gilders, equipped weapon, the unread halfword at +12, falcon pending, falcon total), the byte at `0x801DD3E9`, and the 90 inventory records at `0x801DD82E` (360 bytes). The quantity is the s16 at record + 2. The first halfword of each record is guarded and is not part of the play state. A load that changes any guarded byte fails the write, and the same item is tried again. The count moves only together with the item's own bytes. The falcon grant ORs bit 2 of `0x801DD3E9`, so a change to any other bit in that byte fails the write and the grant is tried again.
 
 The client does not call `GiveItem` or `TryIncrease`. It writes the bytes those routines would store and skips their effect calls. No chest fanfare plays. BizHawk shows `Received <name>`. The name is the item that was written. A sword upgrade that became the Fiend Blade shows `Received Fiend Blade`. When the top tier is already owned, the name stays the upgrade. The log can add a suffix, such as `Already carrying Legend Sword`. The toast does not show that suffix.
 
@@ -301,7 +320,7 @@ The client does not call `GiveItem` or `TryIncrease`. It writes the bytes those 
 | Inventory item with max quantity at least 1, other than the rows below | Quantity s16 at `0x801DD830 + id*4`, plus 1. Two bytes, so the next record's first halfword is left alone. Nothing is equipped. | Herbs (max 9), Strength Tonic, Strength Elixyr, Magic Elixyr, and Wonder Essence wait when quantity is already at max. Those are used from the bag. The Key caps at 99, and a full stack is counted. A unique already at 1 is counted and the quantity is left alone. |
 | Tier 64: sword, flail, bow, armor, the four magic upgrades, boots | The next real tier's quantity. Nothing owned in the slot selects tier 0. Otherwise the best owned tier comes from `FindOwnedItemOfBestTierForSlot`, and the grant is the first id in 0..60 with that slot and best tier + 1. Slot and tier come from `item.json`. Flag bit 0 comes from the vanilla item-info halfword at +2, which the randomizer does not patch. | Never. If that next item is already owned, the receipt is counted. If no further tier exists, the receipt is counted and the upgrade row stays at quantity 0. |
 | `0x45`–`0x48` (1 / 5 / 10 / 30 Gilder) | Add that amount to the s16 at `0x801DD824`. A sum past 9999 is stored as 9999. | Never. Already at 9999 is counted and the purse is left alone. |
-| `0x4F` Gilded Falcon | Add 1 to the pending u16 at `0x801DD82A`. The total at `0x801DD82C` is not rewritten. The `0x400` bit is not written. | Never. Pending plus total is the count readers use. At 50 the falcon is counted, because nothing stores a smaller sum. |
+| `0x4F` Gilded Falcon | Add 1 to the pending u16 at `0x801DD82A`, and OR `0x04` into the byte at `0x801DD3E9` (event `0x05AA`). The other bits in that byte stay. The total at `0x801DD82C` stays for Merrick's dialog to fold. | Never. The fold stores pending plus total and caps that sum at 50. At 50 the falcon is counted. |
 | `0x50` Magic Seed | Add 1 to max MP, cap 4, and set current MP to that max. One 4-byte write at `0x801DD820`. | Never. At 4 the seed is counted. If current is already 4, the only write is the received count. |
 | `0x51` Small Crystal, `0x52` Large Crystal | Small adds 1 to current MP, clamped to max. Large sets current MP to max MP. `item.json` names these Item `0x51` and Item `0x52`. Their ROM max quantity is 0, so they are not inventory rows. | Never. Already full is counted and MP is left alone. |
 | `0x53` Life Vessel | Add 1 to max HP, cap 50, and set current HP to that max. The actor u32 pair and the save s16 pair are both written to those numbers. | Never. At 50 the vessel is counted. If current is below 50 it is filled to 50. |

@@ -10,10 +10,13 @@
 # the source address only for those entity chests. A one-time shop purchase
 # sets its FlagOn later in the same script, after opcode 0x82. A Merrick trade
 # sets its FlagOn in the spawned trade script, after latch 0x8065 and before
-# opcode 0x82. Those codes are eventCode too. The item id is the argument of
-# 0x82, which is the source address. The two bytes before it are not a flag.
-# Restocking shelves do not set a bit in this array, so they omit eventCode.
-# NPC gifts do the same. A code whose low 15 bits are >= 0x800, or code 0, does
+# opcode 0x82. King Snow sets FlagOn after 0x82 on the success path. Each
+# casino second reward sets FlagOn in that give script, before 0x82. Those
+# codes are eventCode too. The item id is the argument of 0x82, which is the
+# source address. The two bytes before it are not a flag. Restocking shelves
+# do not set a bit in this array, so they omit eventCode. A script gift with
+# no bit in this array does the same. A code whose low 15 bits are >= 0x800,
+# or code 0, does
 # not name one check. Sources with no known code stay out of this table.
 
 from __future__ import annotations

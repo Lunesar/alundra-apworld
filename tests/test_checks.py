@@ -125,6 +125,32 @@ class CheckTests(unittest.TestCase):
         codes = [check.event_code for check in LOCATION_CHECKS]
         self.assertEqual(len(codes), len(set(codes)))
 
+    def test_king_snow_and_casino_second_rewards_are_watched(self) -> None:
+        # FlagOn in the give script. King Snow sets the bit after 0x82.
+        # Each casino second reward sets its bit before 0x82.
+        expected = {
+            55: 0x06FB,  # King Snow, map 7 B[10]
+            57: 0x061C,  # Wheel of Fortune second reward, map 474 B[10]
+            59: 0x0616,  # Hit Your Mark second reward, map 473 B[9]
+            61: 0x0622,  # Slime Smash second reward, map 472 B[10]
+        }
+        by_id = {check.location_id: check for check in LOCATION_CHECKS}
+        for source_id, code in expected.items():
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertEqual(source.event_code, code)
+            self.assertEqual(by_id[source_id].event_code, code)
+            self.assertEqual(by_id[source_id].name, source.pretty_name)
+        snow = by_id[55]
+        # 0x06FB is bit 3 of flag byte 0xDF, MainRAM 0x1DD413.
+        self.assertEqual(snow.byte_index, 0xDF)
+        self.assertEqual(snow.mask, 0x08)
+        wheel = by_id[57]
+        # 0x061C is bit 4 of flag byte 0xC3, MainRAM 0x1DD3F7.
+        self.assertEqual(wheel.byte_index, 0xC3)
+        self.assertEqual(wheel.mask, 0x10)
+        codes = [check.event_code for check in LOCATION_CHECKS]
+        self.assertEqual(len(codes), len(set(codes)))
+
     def test_open_chest_is_the_low_bit(self) -> None:
         lutas = next(row for row in LOCATION_CHECKS if row.location_id == 1)
         origin = lutas.byte_index

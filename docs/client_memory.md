@@ -131,7 +131,7 @@ The client watches every source that has `eventCode`. The check name is the sour
 
 A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. A shop slot stores the item id as the argument byte of opcode `0x82`. That byte is the source `address`. The two bytes before it are not a flag. Merrick trades and NPC gifts also store an item id in script bytes, and the two bytes before that id are not a flag. Code 0, and any code whose low 15 bits are `>= 0x800`, is omitted. A code shared by two sources is omitted. On the retail disc, a source whose entity records carry two different codes is omitted too. The two Overworld C4 chests below are the exception: the randomizer patch makes the loaded record use one code, and that code is what `item_source.json` stores.
 
-Watched locations are the `eventCode` fields in `item_source.json`. Fairy Pond's reward chest (id 145, code 0) has no key. NPC script gifts have no key. On this disc, no two sources share one code.
+Watched locations are the `eventCode` fields in `item_source.json`. Fairy Pond's reward chest (id 145, code 0) has no key. These script gifts still have no key: Jess's two blue-chest items (ids 2 and 3), Tarn's Manor Book of Elna (id 129), Miming's Aqua Cape (id 248), and the falling Zolist Diamond Crest (id 253). On this disc, no two sources share one code.
 
 Overworld C4 left coast (id 33) and the forest chest near the right border (id 36) disagree on the retail disc. Map 12, the closed shop, stores `0x06D6` (Magic Elixyr, x `0x0D`) and `0x06D7` (Strength Elixyr, x `0x5F`). Map 407, the open shop, stores `0x0540` (Strength Tonic, x `0x0C`) and `0x0542` (Magic Elixyr, x `0x5E`). `PatchFixMapInconsistencies` runs before item placement and copies the map 12 flag, position, and vanilla item onto the map 407 records: `set_word(0x584D6C8, 0xD606)` and `set_word(0x584D6B4, 0xD706)`. `set_word` writes the high byte first, so the stored bytes are `D6 06` and `D7 06`, little-endian flags `0x06D6` and `0x06D7`. New game writes 407 into the halfword at `0x801DD44C`, so the square loads map 407. The chest routine sets the flag in that loaded record. The client watches `0x06D6` (1750) and `0x06D7` (1751). New game does not set either bit. Neither bit is named in `flags.hpp`. No `FlagOn` of either code (`05 D6 06` or `05 D7 06`) exists in `DATAS.BIN`.
 
@@ -143,6 +143,19 @@ A one-time shop purchase sets its flag with opcode `0x05` on the path that has a
 | Lurvy's Shop: Item #5 replacement when bought once (Life Vessel) | 267 | 398 B[6] | `0x0454` | After the gilder is taken and `0x82` runs. The script does not test `0x82`'s result. Offered only when `0x03F1` is on and `0x0454` is off. |
 | Naomi's Shop: Item #4 (Life Vessel) | 273 | 258 B[5] | `0x02C4` | After the gilder is taken and `0x82` runs. The script does not test `0x82`'s result. Script B[1] activates the shelf entity only while the bit is off. Shop variants 298 and 302 set the same bit on their own purchase. The randomizer keeps Inoa on map 241, whose shop door is 258, and neutralizes later Inoa variant changes. |
 | Lurvy's Shop: Item obtained after repairing Broken Armor (Ancient Armor) | 269 | 398 C[2] | `0x0455` | After `UseItem` consumes Broken Armor (item `0x21`) and `0x82` gives the repaired item (item `0x13`). Nothing else in `DATAS.BIN` reads or writes this bit. |
+
+King Snow and the three casino second rewards set a normal flag in the script that calls `0x82`. New game does not set these bits. A walk from each script entry finds one `FlagOn` of each bit.
+
+King Snow is map 7 script B[10]. Opcode `0xC2` at `0x29B4BC` compares the death count with the next byte (`0x14`, 20). `PatchSetKingSnowDeathCount` writes that byte at `0x29B4BD`. When the test fails, `Goto` at `0x29B4F7` lands at `0x29B550`, past the reward. When it passes, `0x82` at `0x29B52F` gives the item and `FlagOn 0x06FB` at `0x29B54B` follows. Nothing else reads or writes `0x06FB`.
+
+Each casino script skips the give when its reward bit is already on, sets that bit, then calls `0x82`. The win-count test just above that `FlagOn` is a different bit. `PatchSetCasinoWinCount` rewrites the win-count halfword and leaves the reward `FlagOn` in place. `flags.hpp` names `0x0616` `FLAG_CASINO_SHOOTING_RANGE_BANNED` and `0x0622` `FLAG_CASINO_SLIME_BANNED`. `0x061C` is the next bit after the Wheel of Fortune chest flag `0x061B`.
+
+| Source | Id | Map script | FlagOn | Give |
+| --- | --- | --- | --- | --- |
+| Overworld B3: King Snow reward for dying a specified amount of times (Legend Sword) | 55 | 7 B[10] | `0x06FB` | `0x82` at `0x29B52F`, then `FlagOn` at `0x29B54B` |
+| Riverside Casino: 'Wheel of Fortune' second reward (Gilded Falcon) | 57 | 474 B[10] | `0x061C` | `FlagOn` at `0x65FD0B4`, then `0x82` at `0x65FD0C0`. Win test is `0x061A` at `0x65FD0AF`. |
+| Riverside Casino: 'Hit Your Mark' second reward (Gilded Falcon) | 59 | 473 B[9] | `0x0616` | `FlagOn` at `0x65C7A72`, then `0x82` at `0x65C7A7F`. Win test is `0x0614` at `0x65C7A6D`. |
+| Riverside Casino: 'Slime Smash' second reward (Gilded Falcon) | 61 | 472 B[10] | `0x0622` | `FlagOn` at `0x65978EC`, then `0x82` at `0x65978F8`. Win test is `0x0620` at `0x65978E7`. |
 
 Restocking shelves set no bit in the 2048-flag array. Lurvy items 1–4 (ids 262–265), Lurvy's third Item #5 (Wonder Essence, id 268), and Naomi items 1–3 (ids 270–272) only toggle flags whose bit 15 is set (`0x8384` on map 398, `0x81F4` on map 258). Bit 15 selects the array at `0x801E6378`, and the script clears the bit before it returns control. There is no event code to store, so those sources stay out of the watch table.
 

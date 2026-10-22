@@ -101,6 +101,30 @@ class CheckTests(unittest.TestCase):
         codes = [check.event_code for check in LOCATION_CHECKS]
         self.assertEqual(len(codes), len(set(codes)))
 
+    def test_overworld_c4_patched_chests_are_watched(self) -> None:
+        # PatchFixMapInconsistencies copies these map 12 flags onto the map 407
+        # records. New game loads map 407, and the chest routine sets that flag.
+        expected = {
+            33: 0x06D6,  # Overworld C4: Left coast chest (Magic Elixyr)
+            36: 0x06D7,  # Overworld C4: Chest inside forest near the right border
+        }
+        by_id = {check.location_id: check for check in LOCATION_CHECKS}
+        for source_id, code in expected.items():
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertEqual(source.event_code, code)
+            self.assertEqual(by_id[source_id].event_code, code)
+            self.assertEqual(by_id[source_id].name, source.pretty_name)
+        coast = by_id[33]
+        # 0x06D6 is bit 6 of flag byte 0xDA, MainRAM 0x1DD40E.
+        self.assertEqual(coast.byte_index, 0xDA)
+        self.assertEqual(coast.mask, 0x40)
+        forest = by_id[36]
+        # 0x06D7 is bit 7 of the same byte.
+        self.assertEqual(forest.byte_index, 0xDA)
+        self.assertEqual(forest.mask, 0x80)
+        codes = [check.event_code for check in LOCATION_CHECKS]
+        self.assertEqual(len(codes), len(set(codes)))
+
     def test_open_chest_is_the_low_bit(self) -> None:
         lutas = next(row for row in LOCATION_CHECKS if row.location_id == 1)
         origin = lutas.byte_index

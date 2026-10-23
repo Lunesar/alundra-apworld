@@ -50,10 +50,13 @@ def allows_outside_item(
 ) -> bool:
     """A remote item may fill a check.
 
-    forbidPreciousItems marks the restocking shelves, and the table in Tarn's
-    Manor. A precious Alundra item cannot sit there. A remote item cannot
-    either: the shelf offers it again, and buying it spends gilder and adds
-    nothing. A non-progression check still refuses a progression item.
+    forbidPreciousItems marks the restocking shelves, the table in Tarn's
+    Manor, and every Fairy Pond chest. A precious Alundra item cannot sit
+    there. A remote item cannot either: the shelf offers it again, and the
+    pond seals after the reward scene, so a chest left behind is missed.
+    FIXME: keep the Fairy Pond open and give the reward chest (id 145) a
+    real collected flag, then drop forbidPreciousItems on these chests.
+    A non-progression check still refuses a progression item.
     """
     if forbid_precious:
         return False

@@ -134,6 +134,17 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(encoded["player"], "Player")
         self.assertEqual(encoded["item"], "Item")
 
+    def test_fairy_pond_chests_refuse_remote_items(self) -> None:
+        # The pond seals after the reward scene. Ids 139-145.
+        # FIXME: keep the pond open and give id 145 a real collected flag.
+        for source_id in range(139, 146):
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertTrue(source.forbid_precious, source.name)
+            self.assertFalse(allows_outside_item(
+                block_progression=False, progression=False,
+                forbid_precious=source.forbid_precious,
+            ))
+
     def test_non_progression_check_refuses_progression(self) -> None:
         self.assertFalse(allows_outside_item(block_progression=True, progression=True))
         self.assertTrue(allows_outside_item(block_progression=True, progression=False))

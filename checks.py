@@ -15,9 +15,13 @@
 # codes are eventCode too. The item id is the argument of 0x82, which is the
 # source address. The two bytes before it are not a flag. Restocking shelves
 # do not set a bit in this array, so they omit eventCode. A script gift with
-# no bit in this array does the same. A code whose low 15 bits are >= 0x800,
-# or code 0, does
-# not name one check. Sources with no known code stay out of this table.
+# no bit in this array does the same. Jess's blue chest sets FlagOn 0x0046
+# after both 0x82 gives. Ids 2 and 3 both store that code, and
+# checked_locations reports both location ids when the bit is set. Miming's
+# reward scene sets FlagOn 0x0510 after the Topaz 0x82 and before the Aqua
+# Cape 0x82. Ids 247 and 248 both store that code. A code
+# whose low 15 bits are >= 0x800, or code 0, does not name one check.
+# Sources with no known code stay out of this table.
 
 from __future__ import annotations
 

@@ -72,8 +72,7 @@ class CheckTests(unittest.TestCase):
         for source_id in (262, 263, 264, 265, 268, 270, 271, 272):
             self.assertIsNone(GAME_DATA.source_by_id[source_id].event_code)
             self.assertNotIn(source_id, by_id)
-        codes = [check.event_code for check in LOCATION_CHECKS]
-        self.assertEqual(len(codes), len(set(codes)))
+        self._assert_shared_codes()
 
     def test_merrick_trades_are_watched(self) -> None:
         # FlagOn bit set by the spawned trade script on map 134.
@@ -98,8 +97,7 @@ class CheckTests(unittest.TestCase):
         # 0x0599 is bit 1 of flag byte 0xB3, MainRAM 0x1DD3E7.
         self.assertEqual(first.byte_index, 0xB3)
         self.assertEqual(first.mask, 0x02)
-        codes = [check.event_code for check in LOCATION_CHECKS]
-        self.assertEqual(len(codes), len(set(codes)))
+        self._assert_shared_codes()
 
     def test_overworld_c4_patched_chests_are_watched(self) -> None:
         # PatchFixMapInconsistencies copies these map 12 flags onto the map 407
@@ -122,8 +120,7 @@ class CheckTests(unittest.TestCase):
         # 0x06D7 is bit 7 of the same byte.
         self.assertEqual(forest.byte_index, 0xDA)
         self.assertEqual(forest.mask, 0x80)
-        codes = [check.event_code for check in LOCATION_CHECKS]
-        self.assertEqual(len(codes), len(set(codes)))
+        self._assert_shared_codes()
 
     def test_king_snow_and_casino_second_rewards_are_watched(self) -> None:
         # FlagOn in the give script. King Snow sets the bit after 0x82.
@@ -148,8 +145,68 @@ class CheckTests(unittest.TestCase):
         # 0x061C is bit 4 of flag byte 0xC3, MainRAM 0x1DD3F7.
         self.assertEqual(wheel.byte_index, 0xC3)
         self.assertEqual(wheel.mask, 0x10)
-        codes = [check.event_code for check in LOCATION_CHECKS]
-        self.assertEqual(len(codes), len(set(codes)))
+        self._assert_shared_codes()
+
+    def test_jess_blue_chest_reports_both_locations(self) -> None:
+        # Map 260 C[8] gives both items, then sets 0x0046 once.
+        # Both sources store that code, so one bit reports both locations.
+        expected = {
+            2: 0x0046,  # Jess's Letter, 0x82 at 0x3AEAB90
+            3: 0x0046,  # Broken Armor, 0x82 at 0x3AEABD1
+        }
+        by_id = {check.location_id: check for check in LOCATION_CHECKS}
+        for source_id, code in expected.items():
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertEqual(source.event_code, code)
+            self.assertEqual(by_id[source_id].event_code, code)
+            self.assertEqual(by_id[source_id].name, source.pretty_name)
+        letter = by_id[2]
+        # 0x0046 is bit 6 of flag byte 0x08, MainRAM 0x1DD33C.
+        self.assertEqual(letter.byte_index, 0x08)
+        self.assertEqual(letter.mask, 0x40)
+        armor = by_id[3]
+        self.assertEqual(armor.byte_index, letter.byte_index)
+        self.assertEqual(armor.mask, letter.mask)
+        origin = letter.byte_index
+        both = (letter, armor)
+        self.assertEqual(checked_locations(b"\x00", origin, both), [])
+        self.assertEqual(checked_locations(b"\x40", origin, both), [2, 3])
+        self.assertEqual(checked_locations(b"\xbf", origin, both), [])
+        self._assert_shared_codes()
+
+    def test_aqua_cape_shares_the_topaz_bit(self) -> None:
+        # Map 17 B[20] gives the Topaz, sets 0x0510, then gives the cape
+        # after text 163. Map 439 sets the same bit. Both sources store it.
+        expected = {
+            247: 0x0510,  # Topaz Crest, 0x82 at 0x54791C
+            248: 0x0510,  # Aqua Cape, 0x82 at 0x547935
+        }
+        by_id = {check.location_id: check for check in LOCATION_CHECKS}
+        for source_id, code in expected.items():
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertEqual(source.event_code, code)
+            self.assertEqual(by_id[source_id].event_code, code)
+            self.assertEqual(by_id[source_id].name, source.pretty_name)
+        topaz = by_id[247]
+        # 0x0510 is bit 0 of flag byte 0xA2, MainRAM 0x1DD3D6.
+        self.assertEqual(topaz.byte_index, 0xA2)
+        self.assertEqual(topaz.mask, 0x01)
+        cape = by_id[248]
+        self.assertEqual(cape.byte_index, topaz.byte_index)
+        self.assertEqual(cape.mask, topaz.mask)
+        origin = topaz.byte_index
+        both = (topaz, cape)
+        self.assertEqual(checked_locations(b"\x00", origin, both), [])
+        self.assertEqual(checked_locations(b"\x01", origin, both), [247, 248])
+        self.assertEqual(checked_locations(b"\xfe", origin, both), [])
+        self._assert_shared_codes()
+
+    def _assert_shared_codes(self) -> None:
+        counts: dict[int, int] = {}
+        for check in LOCATION_CHECKS:
+            counts[check.event_code] = counts.get(check.event_code, 0) + 1
+        shared = {code: count for code, count in counts.items() if count != 1}
+        self.assertEqual(shared, {0x0046: 2, 0x0510: 2})
 
     def test_open_chest_is_the_low_bit(self) -> None:
         lutas = next(row for row in LOCATION_CHECKS if row.location_id == 1)

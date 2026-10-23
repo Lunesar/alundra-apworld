@@ -201,6 +201,24 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(checked_locations(b"\xfe", origin, both), [])
         self._assert_shared_codes()
 
+    def test_diamond_crest_is_watched(self) -> None:
+        # Map 432 B[1] gives the crest at 0x5D73781. Map 321 B[1] sets
+        # 0x03D0 at 0x477A804 after the fight, then warps back.
+        source = GAME_DATA.source_by_id[253]
+        self.assertEqual(source.event_code, 0x03D0)
+        crest = next(row for row in LOCATION_CHECKS if row.location_id == 253)
+        self.assertEqual(crest.event_code, 0x03D0)
+        self.assertEqual(crest.name, source.pretty_name)
+        # 0x03D0 is bit 0 of flag byte 0x7A, MainRAM 0x1DD3AE.
+        self.assertEqual(crest.byte_index, 0x7A)
+        self.assertEqual(crest.mask, 0x01)
+        origin = crest.byte_index
+        one = (crest,)
+        self.assertEqual(checked_locations(b"\x00", origin, one), [])
+        self.assertEqual(checked_locations(b"\x01", origin, one), [253])
+        self.assertEqual(checked_locations(b"\xfe", origin, one), [])
+        self._assert_shared_codes()
+
     def _assert_shared_codes(self) -> None:
         counts: dict[int, int] = {}
         for check in LOCATION_CHECKS:

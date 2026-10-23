@@ -19,7 +19,9 @@
 # after both 0x82 gives. Ids 2 and 3 both store that code, and
 # checked_locations reports both location ids when the bit is set. Miming's
 # reward scene sets FlagOn 0x0510 after the Topaz 0x82 and before the Aqua
-# Cape 0x82. Ids 247 and 248 both store that code. A code
+# Cape 0x82. Ids 247 and 248 both store that code. The falling Diamond Crest
+# sets FlagOn 0x03D0 on map 321 after Zorgia's fight, after the 0x82 on map
+# 432. Id 253 stores that code. A code
 # whose low 15 bits are >= 0x800, or code 0, does not name one check.
 # Sources with no known code stay out of this table.
 

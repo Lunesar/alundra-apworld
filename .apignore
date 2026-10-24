@@ -1,0 +1,15 @@
+# The Build APWorlds component reads this. Patterns follow .gitignore.
+
+# Tests are for the source tree.
+tests/
+
+# Maintainer notes. The website serves docs/setup_en.md and docs/en_Alundra.md.
+docs/client_memory.md
+docs/TODO.md
+data/README.md
+README.md
+
+# Editor scratch files.
+*.swp
+*.swo
+*~

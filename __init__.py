@@ -142,7 +142,9 @@ class AlundraWorld(World):
     def _add_source_locations(self, regions: dict[str, Region]) -> None:
         for source in GAME_DATA.sources:
             region = regions[source.node_id]
-            region.locations.append(AlundraLocation(self.player, source.pretty_name, source.id, region))
+            location = AlundraLocation(self.player, source.pretty_name, source.id, region)
+            location.source_id = source.id
+            region.locations.append(location)
 
     def _add_visit_events(self, regions: dict[str, Region], excluded_nodes: set[str]) -> None:
         # Pre-placed crests are already on their pedestals. Nothing checks those nodes,
@@ -212,29 +214,65 @@ class AlundraWorld(World):
     def get_filler_item_name(self) -> str:
         return "Herbs"
 
+    def _unreported_locations(self) -> list:
+        found = []
+        for location in self.multiworld.get_locations(self.player):
+            source_id = getattr(location, "source_id", None)
+            if source_id is None:
+                continue
+            if GAME_DATA.source_by_id[source_id].forbid_precious:
+                found.append(location)
+        return found
+
+    def pre_fill(self) -> None:
+        # Same item rules as every other source. These are filled first so they
+        # can stay out of the world's location list.
+        locations = self._unreported_locations()
+        if not locations:
+            return
+        from Fill import fill_restrictive
+        fill_restrictive(
+            self.multiworld,
+            self.multiworld.state,
+            locations,
+            self.multiworld.itempool,
+            name="Alundra unreported",
+        )
+
+    def pre_output(self) -> None:
+        # The fill has already placed an item. These sources cannot be reported,
+        # so they are not part of the room's check list.
+        for location in self.multiworld.get_locations(self.player):
+            source_id = getattr(location, "source_id", None)
+            if source_id is None:
+                continue
+            if GAME_DATA.source_by_id[source_id].forbid_precious:
+                location.address = None
+
     def generate_output(self, output_directory: str) -> None:
         placements: dict[int, int | OutsidePlacement] = {}
         for location in self.multiworld.get_locations(self.player):
-            if location.address is None:
+            source_id = getattr(location, "source_id", None)
+            if source_id is None:
                 continue
             item = location.item
             if item is None:
                 raise RuntimeError(f"Alundra location '{location.name}' has no item.")
             native_id = self._native_item_id(item)
             if native_id is not None:
-                placements[location.address] = native_id
+                placements[source_id] = native_id
                 continue
             if item.player == self.player:
                 raise RuntimeError(
                     f"Alundra location '{location.name}' holds {item.name}, which is not an Alundra item."
                 )
-            source = GAME_DATA.source_by_id[location.address]
+            source = GAME_DATA.source_by_id[source_id]
             if source.forbid_precious:
                 raise RuntimeError(
                     f"Alundra location '{location.name}' holds {item.name} for player {item.player}. "
                     "A check that refuses a precious item also refuses a remote item."
                 )
-            placements[location.address] = self._outside_placement(item)
+            placements[source_id] = self._outside_placement(item)
 
         document = build_placement_document(
             self._settings,

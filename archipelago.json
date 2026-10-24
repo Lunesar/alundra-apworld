@@ -1,6 +1,6 @@
 {
   "game": "Alundra",
   "authors": ["Lunesar"],
-  "world_version": "0.0.9",
+  "world_version": "0.1.0",
   "minimum_ap_version": "0.6.7"
 }

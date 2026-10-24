@@ -15,13 +15,17 @@ sys.modules["alundra"] = _package
 
 from alundra.checks import (
     EVENT_FLAGS,
+    GOAL_ENDING,
+    GOAL_PHASE,
     LOCATION_CHECKS,
     LocationCheck,
     checked_locations,
     flag_read,
+    game_beaten,
     names_for,
 )
-from alundra.data import GAME_DATA
+from alundra.data import GAME_DATA, LOCATION_NAME_TO_ID
+from alundra.receive import REQUESTED_MAP
 
 
 class CheckTests(unittest.TestCase):
@@ -29,7 +33,7 @@ class CheckTests(unittest.TestCase):
         expected = [
             (source.pretty_name, source.id, source.event_code)
             for source in GAME_DATA.sources
-            if source.event_code is not None
+            if source.event_code is not None and not source.forbid_precious
         ]
         self.assertEqual(
             [(check.name, check.location_id, check.event_code) for check in LOCATION_CHECKS],
@@ -250,3 +254,30 @@ class CheckTests(unittest.TestCase):
     def test_event_code_outside_the_array_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             LocationCheck("too far", 9, 2048)
+
+    def test_forbid_precious_sources_are_not_watched(self) -> None:
+        watched = {check.location_id for check in LOCATION_CHECKS}
+        precious = [source for source in GAME_DATA.sources if source.forbid_precious]
+        self.assertTrue(precious)
+        for source in precious:
+            self.assertNotIn(source.id, watched, source.pretty_name)
+            self.assertNotIn(source.pretty_name, LOCATION_NAME_TO_ID)
+        # Fairy Pond chests keep their event codes. The watcher skips them.
+        for source_id in range(139, 145):
+            source = GAME_DATA.source_by_id[source_id]
+            self.assertTrue(source.forbid_precious, source.pretty_name)
+            self.assertIsNotNone(source.event_code, source.pretty_name)
+        reward = GAME_DATA.source_by_id[145]
+        self.assertTrue(reward.forbid_precious)
+        self.assertIsNone(reward.event_code)
+
+    def test_game_beaten_is_the_ending_word(self) -> None:
+        # The phase word is the u32 immediately before the requested map id.
+        self.assertEqual(GOAL_PHASE, REQUESTED_MAP - 4)
+        self.assertEqual(GOAL_ENDING, 9)
+        self.assertTrue(game_beaten((9).to_bytes(4, "little")))
+        for value in (0, 8, 10, 11):
+            self.assertFalse(game_beaten(value.to_bytes(4, "little")), value)
+        self.assertFalse(game_beaten(b"\x09\x00\x00"))
+        self.assertFalse(game_beaten(b""))
+        self.assertFalse(game_beaten((9).to_bytes(4, "big")))

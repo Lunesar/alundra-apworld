@@ -1,9 +1,16 @@
-# Locations the BizHawk client can report as checked.
+# Locations the BizHawk client can report as checked, and the ending goal.
 #
 # A taken check is one bit in the event-flag array. The bit index is the event
 # code passed to FlagOn, stored on the item source as eventCode.
-# LOCATION_CHECKS is every loaded source that has one. The watcher reads the
-# bytes that table names and does not need a new code path.
+# LOCATION_CHECKS is every loaded source that has one and does not set
+# forbidPreciousItems. Those codes stay on the source. The watcher does not
+# read them. The watcher reads the bytes this table names and does not need a
+# new code path for a chest.
+#
+# The goal is not a chest. Beating Melzas leads back to the Lake Shrine, and
+# the shrine scene calls opcode 0xBB. When the loaded map is not 477, that
+# handler stores 9 in the u32 at KSEG0 0x801F11F8. The map loop then loads
+# END.EXE. docs/client_memory.md.
 #
 # The code for a chest that lives in a map entity record is the u16 at
 # record + 0x10. The item id is the byte at record + 0x12, and that byte is
@@ -36,6 +43,11 @@ from .data import GAME_DATA
 EVENT_FLAGS = 0x1DD334
 EVENT_FLAG_BITS = 2048
 
+# u32 just before the requested map id (0x801F11FC). Opcode 0xBB stores 9 here
+# to boot END.EXE. 8, 10, and 11 are other mode changes and are not the goal.
+GOAL_PHASE = 0x1F11F8
+GOAL_ENDING = 9
+
 
 # One location whose FlagOn bit the client can see.
 @dataclass(frozen=True)
@@ -63,7 +75,7 @@ class LocationCheck:
 def _checks_from_sources() -> tuple[LocationCheck, ...]:
     checks: list[LocationCheck] = []
     for source in GAME_DATA.sources:
-        if source.event_code is None:
+        if source.event_code is None or source.forbid_precious:
             continue
         checks.append(LocationCheck(source.pretty_name, source.id, source.event_code))
     return tuple(checks)
@@ -108,3 +120,10 @@ def checked_locations(
 # Check names in table order, for the ids the server was just told about.
 def names_for(location_ids: set[int], checks: tuple[LocationCheck, ...] = LOCATION_CHECKS) -> list[str]:
     return [check.name for check in checks if check.location_id in location_ids]
+
+
+# True when the four bytes are the ending request. A short read is not a clear.
+def game_beaten(phase: bytes) -> bool:
+    if len(phase) != 4:
+        return False
+    return int.from_bytes(phase, "little") == GOAL_ENDING

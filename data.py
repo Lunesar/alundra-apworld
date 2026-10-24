@@ -469,13 +469,18 @@ def item_name_to_id_map(game_data: GameData) -> dict[str, int]:
     return {item.name: item.ap_id for item in exposed_item_records(game_data)}
 
 
+def location_sources(game_data: GameData) -> tuple[ItemSourceRecord, ...]:
+    # forbidPreciousItems sources are filled, then left out of the location list.
+    return tuple(source for source in game_data.sources if not source.forbid_precious)
+
+
 def location_name_to_id_map(game_data: GameData) -> dict[str, int]:
-    return {source.pretty_name: source.id for source in game_data.sources}
+    return {source.pretty_name: source.id for source in location_sources(game_data)}
 
 
 def location_groups(game_data: GameData) -> dict[str, set[str]]:
     grouped: dict[str, set[str]] = {}
-    for source in game_data.sources:
+    for source in location_sources(game_data):
         grouped.setdefault(source.region_name, set()).add(source.pretty_name)
     return grouped
 

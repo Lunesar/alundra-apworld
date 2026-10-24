@@ -127,11 +127,11 @@ For a client that cannot enter MIPS, write the stores above and skip the effect 
 
 A taken source is an event-flag bit, not a byte next to the inventory record. Map scripts turn bits on with opcode `0x05` (`FlagOn`) and test them with `0x30` / `0x31` (`IfFlagOn` / `IfFlagOff`). The same bits are what `flags.hpp` names. `item_source.json` stores that bit index as `eventCode` when the code is known, and omits the key when it is unknown. `eventCode` is the bit index passed to `FlagOn`. It is not a RAM address. `address` and `spriteAddress` are offsets in `DATAS.BIN` where the patch writes the item id. The patcher does not read `eventCode`.
 
-The client watches every source that has `eventCode`. The check name is the source pretty name: the JSON `name`, plus ` (vanillaItem)` when a vanilla item is set. The location id is the source `id`.
+The client watches every source that has `eventCode`, except sources that set `forbidPreciousItems`. Those codes stay in the JSON. The watcher does not read them. They are left out of the world's location list, and after the fill they are left out of the room's check list. The check name is the source pretty name: the JSON `name`, plus ` (vanillaItem)` when a vanilla item is set. The location id is the source `id`.
 
 A chest that lives in a map entity record stores its collected event code in the u16 at record + 0x10, and the item id in the byte at record + 0x12. That byte is the source `address` only for those entity chests. A shop slot stores the item id as the argument byte of opcode `0x82`. That byte is the source `address`. The two bytes before it are not a flag. Merrick trades and NPC gifts also store an item id in script bytes, and the two bytes before that id are not a flag. Code 0, and any code whose low 15 bits are `>= 0x800`, is omitted. A code shared by two sources that can be collected separately is omitted. On the retail disc, a source whose entity records carry two different codes is omitted too. The two Overworld C4 chests below are the exception: the randomizer patch makes the loaded record use one code, and that code is what `item_source.json` stores. Jess's blue chest is one exception: one opening sets one bit after both gives, and both sources store that code. Miming's reward scene is the other: `0x0510` is set after the Topaz give and before the Aqua Cape give, and ids 247 and 248 both store that code.
 
-Watched locations are the `eventCode` fields in `item_source.json`. Fairy Pond's reward chest (id 145, code 0) has no key. Every Fairy Pond chest sets `forbidPreciousItems` while the pond still seals. FIXME: keep the pond open and give the reward chest a real collected flag. This script gift still has no key: Tarn's Manor Book of Elna (id 129).
+Watched locations are the `eventCode` fields in `item_source.json`, except sources that set `forbidPreciousItems`. Fairy Pond chests 139–144 have event codes and are not watched. Fairy Pond's reward chest (id 145, code 0) has no key. Every Fairy Pond chest sets `forbidPreciousItems` while the pond still seals. FIXME: keep the pond open and give the reward chest a real collected flag. This script gift still has no key: Tarn's Manor Book of Elna (id 129).
 
 Jess's blue chest is map 260 script C[8], entry `0x3AEAB6C`. The chest entity's collected flag is 0. The script consumes the Small Key, gives Jess's Letter with `0x82` at `0x3AEAB90` (id 2), gives the Broken Armor with `0x82` at `0x3AEABD1` (id 3), then sets `FlagOn 0x0046` at `0x3AEABEC`. No branch sits between the two gives. A walk from the script entries finds that one `FlagOn`, and no script tests the bit. New game does not set it. `0x0046` is 70, bit 6 of flag byte `0x08`, MainRAM `0x801DD33C`, mask `0x40`. Ids 2 and 3 both store 70. `checked_locations` appends both location ids when the bit is on, and the watcher sends that list. The same script also sets `0x00DB`. New game already sets that bit as `FLAG_CHANGE_SIGN_TO_CLIFFS_OF_MADNESS` (`Flag(0xD34F, 3)`), and map 274 clears it while advancing Inoa. `PatchAdaptBlueChest` still runs both gives and the `FlagOn`. Its first skip is the HUD `FlagOff` at `0x3AEABEF`.
 
@@ -276,15 +276,26 @@ Boss and clear bits a client can watch without a per-location table:
 - Coal Mine boss: `FLAG_COAL_MINE_BOSS_BEATEN`
 - Magyscar boss: `FLAG_MAGYSCAR_BOSS_BEATEN`. `FLAG_POST_MAGYSCAR_STORY` is the later Ronan dialog, not the kill.
 - Ancient Shrine symbols-pillar room: `FLAG_ANCIENT_SHRINE_SYBOLS_PILLAR_ROOM_CLEARED`. The vanilla bush near Magyscar used this same bit; the randomizer moves that bush to `FLAG_JESS_TALKED_LEAVING_HOUSE_ON_GAME_START`.
-- Lake Shrine seals and the exterior gate: the `FLAG_LAKE_SHRINE_*` bits. There is no separate "Melzas dead" flag in `flags.hpp`.
+- Lake Shrine seals and the exterior gate: the `FLAG_LAKE_SHRINE_*` bits. Beating Melzas is not one of those bits. The goal the client sends is the ending phase word, below.
 - Nirude broken: `FLAG_NIRUDE_IS_BROKEN`. `FLAG_NIRUDE_STATUES_VULNERABLE` is not a clear flag.
 
 Clear flags for Lars Crypt, the Coastal Cave, the Reptile Lair, the Great Tree, Torla, and the Fairy Pond are **TBD**. They are not named in `flags.hpp`.
+
+## Goal (beating the game)
+
+Beating Melzas returns the player to the Lake Shrine. Map 347 script B[6] (entry `0x4CBEFD0`) requires persistent flag `0x047A`, waits until the player stands on tile x=39–40, y=56, plays a short scene, then calls opcode `0xBB` at `0x4CBF02D`.
+
+The `0xBB` handler is `0x800425B8`. It reads the loaded map id at `0x801F5358`. When that map is not 477, it stores 9 in the u32 at `0x801F11F8` (MainRAM `0x1F11F8`). The map loop at `0x8002C6A8` treats 9 as the request to load `END.EXE`. Map 477's own `0xBB` stores 10 or 11 instead, and those are not the goal. 8 is another mode change. The only store of the constant 9 is that handler.
+
+`0x047A` is set on map 323 when the fight entity is gone, in the same script tick as the warp toward Melzas. Map 347 B[6] tests it. `0x047B` is set once, at `0x485BF68` on map 327 script B[1], immediately before `ChangeMap` 471. No script reads `0x047B`. It is not named in `flags.hpp`. The client does not wait on it.
+
+The BizHawk client reads MainRAM `0x1F11F8` until the goal is sent. The little-endian value 9 sends `StatusUpdate` with `CLIENT_GOAL` and logs `Goal completed.`. A read while the client is not logged in does not count. The word is still 9 on the next watch, until `END.EXE` replaces the image. After the credits the word is gone, so a reconnect does not see it again.
 
 ## Current map, and when not to grant
 
 | What | Address | Size | Notes |
 | --- | --- | --- | --- |
+| Ending phase | `0x801F11F8` | u32 | Four bytes before the requested map id. Opcode `0xBB` stores 9 here to boot `END.EXE`. See Goal. |
 | Requested map id | `0x801F11FC` | u32 | New game and the spawn-apply path store the save spawn map (`0x801DD324`) here. Values are `map_codes.hpp` ids. |
 | Map id last passed to the loader | `0x801F5358` | u32 | `0x8002C440` copies the requested id here when it changes, then calls `0x80083F04`. The save-capture path copies this word back to `0x801DD324`. |
 

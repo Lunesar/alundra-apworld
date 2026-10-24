@@ -2,8 +2,9 @@
 
 Archipelago ships the Lua connector (`data/lua/connector_bizhawk_generic.lua`).
 This module is the handler that connector talks to. It claims a PlayStation
-image, logs in to a room, reports locations listed in ``checks.py``, and
-grants an item the server sends from another game.
+image, logs in to a room, reports locations listed in ``checks.py``, grants
+an item the server sends from another game, and sends the goal when the
+ending is requested.
 """
 
 from __future__ import annotations
@@ -13,9 +14,18 @@ import sys
 from typing import TYPE_CHECKING, ClassVar
 
 import worlds._bizhawk as bizhawk
+from NetUtils import ClientStatus
 from worlds._bizhawk.client import BizHawkClient
 
-from .checks import EVENT_FLAGS, WATCHED_LOCATION_IDS, checked_locations, flag_read, names_for
+from .checks import (
+    EVENT_FLAGS,
+    GOAL_PHASE,
+    WATCHED_LOCATION_IDS,
+    checked_locations,
+    flag_read,
+    game_beaten,
+    names_for,
+)
 from .receive import READS, Hold, hold_message, parse_play_state, pending_ap_id, plan
 
 logger = logging.getLogger("Client")
@@ -79,13 +89,17 @@ class AlundraClient(BizHawkClient):
         return True
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        """Report checked locations, then grant one queued remote item."""
+        """Report checked locations, grant one queued remote item, and send the goal."""
         received = list(ctx.items_received)
         watching = bool(ctx.missing_locations & WATCHED_LOCATION_IDS)
-        if not watching and not received:
+        # The ending word is not a location. Keep reading it after the last chest.
+        send_goal = not ctx.finished_game
+        if not watching and not received and not send_goal:
             return
         flag = flag_read() if watching else None
         reads: list[tuple[int, int, str]] = []
+        if send_goal:
+            reads.append((GOAL_PHASE, 4, _MAIN_RAM))
         if flag is not None:
             offset, length = flag
             reads.append((offset, length, _MAIN_RAM))
@@ -97,16 +111,35 @@ class AlundraClient(BizHawkClient):
             read_bytes = await bizhawk.read(ctx.bizhawk_ctx, reads)
         except _READ_ERRORS:
             return
+        cursor = 0
+        if send_goal:
+            if game_beaten(read_bytes[cursor]):
+                await self._complete_goal(ctx)
+            cursor += 1
         if flag is not None:
             offset, _length = flag
-            sent = await ctx.check_locations(checked_locations(read_bytes[0], offset - EVENT_FLAGS))
+            sent = await ctx.check_locations(checked_locations(read_bytes[cursor], offset - EVENT_FLAGS))
             unreported = sent - self._reported
             if unreported:
                 self._reported.update(unreported)
                 logger.info("Checked %s.", ", ".join(names_for(unreported)))
-            read_bytes = read_bytes[1:]
+            cursor += 1
         if received:
-            await self._receive(ctx, read_bytes, received)
+            await self._receive(ctx, read_bytes[cursor:], received)
+
+    async def _complete_goal(self, ctx: "BizHawkClientContext") -> None:
+        """Tell the room the ending was requested.
+
+        A watch before login does not count. The word is still 9 on the next
+        watch, until END.EXE replaces the image.
+        """
+        if ctx.finished_game or not _can_send(ctx):
+            return
+        await ctx.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
+        if not _can_send(ctx):
+            return
+        ctx.finished_game = True
+        logger.info("Goal completed.")
 
     async def _receive(self, ctx: "BizHawkClientContext", read_bytes: list[bytes], received: list) -> None:
         """Grant the item at the saved count when this watch matches the last one.
@@ -170,3 +203,16 @@ class AlundraClient(BizHawkClient):
         self._stable = None
         self._holds.clear()
         logger.info("Logged in as %s.", ctx.auth)
+
+
+def _can_send(ctx: "BizHawkClientContext") -> bool:
+    """True when a StatusUpdate would leave this process.
+
+    ``send_msgs`` drops the packet when the socket is not open. The goal must
+    not be marked done on that drop.
+    """
+    server = ctx.server
+    if server is None or ctx.slot is None:
+        return False
+    socket = server.socket
+    return socket is not None and socket.open and not socket.closed

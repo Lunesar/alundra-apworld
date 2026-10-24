@@ -41,7 +41,7 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   Leave `version` and `compatible_version` out of the source `archipelago.json`. The builder adds them. The current container version is 7. `game`, `authors`, `world_version`, and `minimum_ap_version` are copied from the file that is already in the world.
 
-  `data.py` loads `data/*.json` through `Path(__file__)`. Inside the zip that path is not a directory, so the world fails to import. Read those files with `importlib.resources` before the archive is the thing players install. `.apignore` already leaves out `tests/`, `docs/TODO.md`, `README.md`, `data/README.md`, and `docs/client_memory.md`. The setup guide and the game page stay. `__pycache__` is already excluded by Archipelago. `data/` is a data folder next to `data.py`. It does not need an `__init__.py`.
+  `data.py` reads `data/*.json` with `importlib.resources`, so the same load works from the source tree and from the zip. `.apignore` leaves out `tests/`, `docs/TODO.md`, `README.md`, `data/README.md`, and `docs/client_memory.md`. The setup guide and the game page stay. `__pycache__` is already excluded by Archipelago. `data/` is a data folder next to `data.py`. It does not need an `__init__.py`.
 
 ## APworld enhancements
 

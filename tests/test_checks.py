@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import importlib.machinery
 import sys
 import types
 import unittest
 from pathlib import Path
 
+# importlib.resources.files reads the package spec. The loader is not executed.
 _world = Path(__file__).resolve().parents[1]
+_loader = importlib.machinery.SourceFileLoader("alundra", str(_world / "__init__.py"))
 _package = types.ModuleType("alundra")
 _package.__path__ = [str(_world)]
 _package.__package__ = "alundra"
+_package.__loader__ = _loader
+_package.__spec__ = importlib.machinery.ModuleSpec("alundra", _loader, is_package=True)
+_package.__spec__.submodule_search_locations = [str(_world)]
 sys.modules["alundra"] = _package
 
 from alundra.checks import (

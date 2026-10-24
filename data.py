@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
+from importlib.resources import files
 
 ITEM_COUNT = 0x5A
 ITEM_ID_BASE = 800000
@@ -208,26 +208,20 @@ def visited_item_name(node_id: str) -> str:
     return f"Visited {node_id}"
 
 
-def logic_data_directory() -> Path:
-    directory = Path(__file__).resolve().parent / "data"
-    marker = directory / "item_source.json"
-    if not marker.is_file():
-        raise AlundraDataError(
-            f"Logic data is missing: {marker}. Copy it from the randomizer's "
-            "src/model/data/item_source.json."
-        )
-    return directory
-
-
-def _load_json(path: Path):
+def _load_json(name: str):
+    # Package data, not a filesystem path. A zipped .apworld has no directory
+    # for Path(__file__) to open. files() reads the member either way.
+    resource = files(__package__).joinpath("data", name)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = resource.read_text(encoding="utf-8")
     except FileNotFoundError as error:
-        raise AlundraDataError(f"Logic data file is missing: {path}") from error
+        raise AlundraDataError(
+            f"Logic data file is missing: data/{name}."
+        ) from error
     try:
         return json.loads(text)
     except json.JSONDecodeError as error:
-        raise AlundraDataError(f"Malformed JSON in {path}: {error}") from error
+        raise AlundraDataError(f"Malformed JSON in data/{name}: {error}") from error
 
 
 def _reject_unknown(kind: str, label: str, keys: set[str], allowed: set[str]) -> None:
@@ -434,15 +428,14 @@ def _check_builtin_references(
         raise AlundraDataError("Spawn node 'inoa' or end node 'end' is missing.")
 
 
-def load_game_data(directory: Path | None = None) -> GameData:
-    directory = directory or logic_data_directory()
-    items, item_by_name = _parse_items(_load_json(directory / "item.json"))
-    regions, node_regions = _parse_regions(_load_json(directory / "world_region.json"))
-    nodes = _parse_nodes(_load_json(directory / "world_node.json"), node_regions)
+def load_game_data() -> GameData:
+    items, item_by_name = _parse_items(_load_json("item.json"))
+    regions, node_regions = _parse_regions(_load_json("world_region.json"))
+    nodes = _parse_nodes(_load_json("world_node.json"), node_regions)
     sources, source_by_id, source_by_pretty_name = _parse_item_sources(
-        _load_json(directory / "item_source.json"), nodes, item_by_name,
+        _load_json("item_source.json"), nodes, item_by_name,
     )
-    paths = _parse_paths(_load_json(directory / "world_path.json"), nodes, item_by_name)
+    paths = _parse_paths(_load_json("world_path.json"), nodes, item_by_name)
     _check_builtin_references(item_by_name, source_by_pretty_name, nodes)
     return GameData(
         items=items,

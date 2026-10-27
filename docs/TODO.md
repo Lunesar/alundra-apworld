@@ -25,9 +25,7 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
 - [ ] Add a patch window so the player does not run the randomizer from a command line.
 
-  Patching is `alundra-randomizer --placement-in=<file>`. The world does not patch the disc. The window takes the placement file from the generation zip and a USA 1.1 disc, runs that patch, and shows where the BIN/CUE was written. The placement file already carries the settings, so the window does not ask for a preset.
-
-  The Archipelago Launcher can host the window as a component, the same way other worlds add launcher entries. The randomizer release package can ship the window instead. Either one is enough.
+  The window takes the downloaded player file and a USA 1.1 disc, runs the patcher shipped in this world, and shows where the BIN/CUE was written. The placement file already carries the settings, so the window does not ask for a preset. The Archipelago Launcher hosts the window as a component, the same way other worlds add launcher entries.
 
 - [ ] Ship the world as `alundra.apworld`.
 
@@ -42,6 +40,26 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
   Leave `version` and `compatible_version` out of the source `archipelago.json`. The builder adds them. The current container version is 7. `game`, `authors`, `world_version`, and `minimum_ap_version` are copied from the file that is already in the world.
 
   `data.py` reads `data/*.json` with `importlib.resources`, so the same load works from the source tree and from the zip. `.apignore` leaves out `tests/`, `docs/TODO.md`, `README.md`, `data/README.md`, and `docs/client_memory.md`. The setup guide and the game page stay. `__pycache__` is already excluded by Archipelago. `data/` is a data folder next to `data.py`. It does not need an `__init__.py`.
+
+- [ ] Write the placement file as a player container with its own extension, so the room page offers it for download.
+
+  The share page prints "No file to download for this game." The Download column in `WebHostLib/templates/macros.html` links a file only when the slot bytes are an `APPlayerContainer`: a zip that holds `archipelago.json`, and whose `game` and `player` match the slot (`is_ap_player_container` in `worlds/Files.py`). `generate_output` writes a bare `AP_{seed}_P{n}_{name}.alundra.json`. Uploading the generation zip does store those bytes on the slot. The name matches the `AP_*_P{n}_*` rule in `WebHostLib/upload.py`. The page then rejects them because they are not that container.
+
+  Other worlds write one file per player whose name ends in their own extension, and that file is the zip. The Wind Waker writes `AP_{seed}_P{n}_{name}.aptww` through `TWWContainer`. Do the same here. `generate_output` writes `AP_{seed}_P{n}_{name}.apalundra`. The file is a zip. `archipelago.json` inside it names this game and this player, and the placement JSON is a member. The generation zip carries that one file. The room page then shows "Download Patch File..." and `download_patch` serves it, filling in the server address. The patcher shipped in this world opens the container and reads the placement member.
+
+- [ ] Ship the Linux and Windows patchers inside the apworld, and pick one at runtime.
+
+  A player who has this apworld still has to fetch the randomizer before a disc can be patched. Build `alundra-randomizer` for Linux and for Windows and store both binaries in the world. Store `dumpsxiso` and `mkpsxiso` for both platforms next to them. The randomizer runs those tools from `./tools/` on Linux and from `tools\\dumpsxiso.exe` and `tools\\mkpsxiso.exe` on Windows, and the working directory has to be the folder that contains `tools/`. The apworld is a zip, so the chosen files are extracted to a temporary directory and run from there. `sys.platform` selects the pair: `linux` or `win32`. The window from the patch item passes the downloaded `.apalundra` file and the player's USA 1.1 disc. The BizHawk client is already the Python in this world. Archipelago and BizHawk stay separate installs. The disc stays the player's own copy.
+
+- [ ] Report a location hint when the player reads one in the game, or looks at a shop shelf that is a check.
+
+  The client sends `LocationChecks` for a watched flag. It does not send `LocationScouts`. The randomizer writes hint sentences into dialogue at patch time (`PatchApplyHintText`). The room never hears that the player read one. Archipelago hint points are not spent inside the game.
+
+  When the player reads a hint, or sees the item on a shop shelf that is a location, send `LocationScouts` for those location ids with `create_as_hint` set to 2. That records a hint for the room and broadcasts it once. It does not spend hint points. Skip a location this client has already scouted. A non-zero `create_as_hint` stores a hint even after the location is checked, so a shelf the player already bought stays a check and is not scouted again.
+
+  The twelve speakers are Lars, Jeal, Miming, Vul, Wilda, Uma, Zazan in the Coal Mine, the Ancient Shrine priest, Stenia, Zazan in the Great Tree, Nava, and Jess. An item hint names one item and one place (`random_hint_for_item` picks one source). A region hint says that something useful lies in a region, or that nothing of interest does, and names no check. The dialogue string does not carry a location id. The patch has to store, for each speaker, the location ids that sentence refers to, where the client can read them when that dialogue is on screen. A region hint with no check sends nothing.
+
+  The one-time shelves are the shop checks: Lurvy's Item #5, its first replacement, the repaired Ancient Armor, and Naomi's Item #4. Looking at that stock is the scout. Buying it is already the check. The eight restocking shelves are not locations, so a look at them has no id to send. The client does not yet know which map is on screen or which string is showing. Those reads belong in `docs/client_memory.md` once the addresses are known.
 
 ## APworld enhancements
 
@@ -72,6 +90,16 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   Lurvy sells all five healing items. Wonder Essence is the shelf that replaces the unique slot after Leather Armor and the Life Vessel have been bought. Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Strength Elixyr and Wonder Essence are bought back at Lurvy. The patch already obeys the item id in the placement file, so this option lives in the apworld.
 
+- [ ] Keep a key item off a restocking shelf.
+
+  A restocking shelf refuses a precious item and an item whose gold value is 0. The Tree Gem is neither. Its gold value is 150, and the path from `overworld_a3_left_behind_power_glove` to `overworld_a2` requires it, so a seed can place the only copy on Lurvy's repeatable stock. Buying it does not use up a check, and the shelf offers it again. The Small Key, the Sluice Key, the Elevator Key, the Curious Key, Jess's Letter, and Zolist's Stone already have no gold value, so every shop refuses them. The Bouquet and the Secret Pass have a gold value and are not precious, and a path requires each of them, so they can land on the same shelves. The seven crests can too. Their gold values run from 800 to 1500, and they are not marked precious. When a restocking shelf is filled from the pool, it still refuses these items. A one-time shelf may still sell one.
+
+- [ ] Give a remote shop item a price the player can pay when the item is needed early.
+
+  Naomi's Item #4 held another player's item that the seed needed early, and the shelf charged 500 gilder. The other player waited while this player ground the money. That shelf is a legal check. The price is the problem. A remote item has no gold value, so `patch_apply_item_sources` leaves the disc's price in place and the shop line reads that word. An Alundra item writes its own gold value instead. Lurvy's one-time shelves do the same for a remote item.
+
+  Write a price for a remote item on a shop check into the placement file, and have the patch write that word. An early required item stays cheap enough that gathering the gilder is not its own step. A later item can still cost more. One flat price for every remote shop item is the other choice. The placement file is what tells the two apart.
+
 ## Randomizer enhancements
 
 The Fairy Pond and the Book of Elna are marked in `world_shuffler.cpp`, `placement.py`, and both copies of `docs/client_memory.md`. `item_source.json` is shared. A flag added for one of these sources is copied into the apworld data, `forbidPreciousItems` comes off that source, and the client watches the new code.
@@ -87,3 +115,15 @@ The Fairy Pond and the Book of Elna are marked in `world_shuffler.cpp`, `placeme
 - [ ] Give the Book of Elna a collected flag, and leave it taken.
 
   Source 129 is the ground item on the table in Tarn's Manor (`spriteAddress` `1BA5D06`). It has no `eventCode`, so it comes back when the room loads again. `forbidPreciousItems` keeps it out of the check list. The patch already clears the byte at `0x1BA5D05`. Add an event code. Taking the book sets that flag, and entering the room again does not put the book back. The client then watches source 129.
+
+- [ ] Require the Iron Flail to get past the three-chest room in the Fire Wand and Bomb cave.
+
+  The Fire Wand opens `overworld_a2_behind_vines`. A Bomb then opens `overworld_a2_behind_vines_and_bomb`. That node is one room too big. The three chests in the bridge cave can be taken with the wand and the Bomb and no flail:
+
+  | Id | Chest |
+  | --- | --- |
+  | 86 | Overworld A2: Left chest in bridge cave with 3 chests |
+  | 87 | Overworld A2: Middle chest in bridge cave with 3 chests |
+  | 88 | Overworld A2: Right chest in bridge cave with 3 chests |
+
+  Getting past that room takes the Iron Flail. The same node also holds the spikeball chest, the upper chest, both chests among the trees, and the chest after the Stone Golem (ids 89–93), and its two-way edge opens `overworld_a1` with nothing required. `overworld_a1` then opens `great_tree_tower`. Split the node so 86–88 stay on the Bomb side. Put a new edge behind them that requires the Iron Flail, and move the exit to A1 onto that far side. A check that is past the room moves with the exit. A check that is in the room with the three chests stays. Other flail gates in `world_path.json` name the Iron Flail. Progressive mode already treats a flail upgrade as that item. There is also a one-way edge from the Bomb node back to `overworld_a2`. Keep it from skipping the flail. Edit the randomizer's graph, then copy `world_path.json`, `world_node.json`, and `item_source.json` here.

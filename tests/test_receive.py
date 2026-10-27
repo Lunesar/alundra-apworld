@@ -35,7 +35,7 @@ from alundra.receive import (
     MENU_STATE,
     MENU_WINDOW,
     READS,
-    SAVE_GOLD,
+    SAVE_GILDER,
     SAVE_HP,
     SAVE_MP,
     STAT_REST,
@@ -107,7 +107,7 @@ class ReceiveTests(unittest.TestCase):
         # Max quantity 0: TryIncrease sees quantity already equal to max and writes nothing.
         self.assertEqual(self.vessel.max_quantity, 0)
         self.assertEqual(set(HANDLERS), {item.ap_id for item in GAME_DATA.items})
-        # A fresh file is in gameplay, so each item.json id grants or waits on a full stack.
+        # A fresh file is in gameplay, so each item.json id grants.
         # Nothing in item.json is unknown.
         for item in GAME_DATA.items:
             result = plan(playing(), item.ap_id)
@@ -136,7 +136,7 @@ class ReceiveTests(unittest.TestCase):
         )
         self.assertEqual(STAT_REST, 0x1DD820)
         self.assertEqual(SAVE_MP, 0x1DD820)
-        self.assertEqual(SAVE_GOLD, 0x1DD824)
+        self.assertEqual(SAVE_GILDER, 0x1DD824)
         self.assertEqual(FALCON_PENDING, 0x1DD82A)
         self.assertEqual(FALCON_VISIT, 0x1DD3E9)
         self.assertEqual(FALCON_BROUGHT, 0x04)
@@ -154,7 +154,7 @@ class ReceiveTests(unittest.TestCase):
             received_index=3,
             mp_current=2,
             mp_max=3,
-            gold=40,
+            gilder=40,
             equipped=-1,
             stat_gap=7,
             falcon_pending=1,
@@ -267,8 +267,8 @@ class ReceiveTests(unittest.TestCase):
     def test_grants_wait_on_a_bad_stat_or_stack(self) -> None:
         self.assertIs(plan(playing(mp_max=5), self.vessel.ap_id), Hold.GAMEPLAY)
         self.assertIs(plan(playing(mp_current=1, mp_max=0), self.vessel.ap_id), Hold.GAMEPLAY)
-        self.assertIs(plan(playing(gold=10000), self.vessel.ap_id), Hold.GAMEPLAY)
-        self.assertIs(plan(playing(gold=-1), self.vessel.ap_id), Hold.GAMEPLAY)
+        self.assertIs(plan(playing(gilder=10000), self.vessel.ap_id), Hold.GAMEPLAY)
+        self.assertIs(plan(playing(gilder=-1), self.vessel.ap_id), Hold.GAMEPLAY)
         self.assertIs(plan(playing(falcon_pending=51), self.vessel.ap_id), Hold.GAMEPLAY)
         self.assertIs(plan(playing(falcon_total=51), self.vessel.ap_id), Hold.GAMEPLAY)
         self.assertIs(plan(stacked("Herbs", 100), self.vessel.ap_id), Hold.GAMEPLAY)
@@ -304,38 +304,85 @@ class ReceiveTests(unittest.TestCase):
             f"Cannot receive item {unknown} yet. It stays queued.",
         )
 
-    def test_a_full_stack_stays_in_front_of_a_life_vessel(self) -> None:
+    def test_a_full_healing_stack_pays_its_shop_price(self) -> None:
+        prices = {
+            "Herbs": 5,
+            "Strength Tonic": 20,
+            "Strength Elixyr": 50,
+            "Magic Elixyr": 30,
+            "Wonder Essence": 200,
+        }
         herbs = GAME_DATA.item_by_name["Herbs"]
         full = stacked("Herbs", 9)
         self.assertIs(plan(replace(full, menu_window=1), herbs.ap_id), Hold.GAMEPLAY)
-        self.assertIs(plan(full, herbs.ap_id), Hold.NO_ROOM)
         self.assertEqual(pending_ap_id(full, [herbs.ap_id, self.vessel.ap_id]), herbs.ap_id)
-        self.assertEqual(full.received_index, 0)
-        self.assertEqual(
-            hold_message(Hold.NO_ROOM, herbs.ap_id),
-            "No room for Herbs yet. It stays queued.",
-        )
 
-        opened = grant_of(stacked("Herbs", 8), "Herbs")
+        paid = grant_of(full, "Herbs")
+        self.assertEqual(paid.name, "5 Gilder for Herbs")
+        self.assertEqual(paid.detail, "")
+        self.assertEqual(paid.next_state.gilder, 5)
+        self.assertEqual(paid.next_state.quantities[herbs.in_game_id], 9)
+        self.assertEqual(paid.next_state.received_index, 1)
+        self.assertEqual(paid.writes[0].address, SAVE_GILDER)
+        self.assertEqual(paid.writes[0].data, struct.pack("<h", 5))
+        pile = grant_of(playing(), "5 Gilder")
+        self.assertEqual(paid.writes, pile.writes)
+        self.assertEqual(paid.next_state.gilder, pile.next_state.gilder)
+        again = plan(paid.next_state, herbs.ap_id)
+        assert isinstance(again, Grant)
+        self.assertEqual(again.next_state.gilder, 10)
+        self.assertEqual(again.next_state.quantities[herbs.in_game_id], 9)
+        self.assertEqual(again.next_state.received_index, 2)
+        following = plan(again.next_state, self.vessel.ap_id)
+        assert isinstance(following, Grant)
+        self.assertEqual(following.next_state.save_max, 11)
+        self.assertEqual(following.next_state.gilder, 10)
+        self.assertEqual(following.next_state.quantities[herbs.in_game_id], 9)
+
+        opened = grant_of(stacked("Herbs", 8, gilder=10), "Herbs")
         self.assertEqual(opened.name, "Herbs")
         self.assertEqual(opened.detail, "")
+        self.assertEqual(opened.next_state.gilder, 10)
         self.assertEqual(opened.next_state.quantities[herbs.in_game_id], 9)
         self.assertEqual(opened.writes[0].address, INVENTORY + herbs.in_game_id * 4 + 2)
         self.assertEqual(opened.writes[0].data, struct.pack("<h", 9))
         self.assertEqual(len(opened.writes[0].data), 2)
-        following = plan(opened.next_state, self.vessel.ap_id)
-        assert isinstance(following, Grant)
-        self.assertEqual(following.next_state.save_max, 11)
-        self.assertEqual(following.next_state.quantities[herbs.in_game_id], 9)
 
-    def test_used_once_items_wait_and_uniques_do_not(self) -> None:
-        for name in ("Strength Tonic", "Wonder Essence", "Strength Elixyr", "Magic Elixyr"):
+        for name, price in prices.items():
             item = GAME_DATA.item_by_name[name]
-            self.assertIs(plan(stacked(name, 1), item.ap_id), Hold.NO_ROOM)
+            self.assertEqual(item.gold_value, price)
+            self.assertEqual(item.max_quantity, 9 if name == "Herbs" else 1)
+            if name == "Herbs":
+                continue
             granted = grant_of(playing(), name)
+            self.assertEqual(granted.name, name)
+            self.assertEqual(granted.next_state.gilder, 0)
             self.assertEqual(granted.next_state.quantities[item.in_game_id], 1)
             self.assertEqual(granted.writes[0].data, struct.pack("<h", 1))
+            sold = grant_of(stacked(name, 1, gilder=3), name)
+            self.assertEqual(sold.name, f"{price} Gilder for {name}")
+            self.assertEqual(sold.detail, "")
+            self.assertEqual(sold.next_state.gilder, 3 + price)
+            self.assertEqual(sold.next_state.quantities[item.in_game_id], 1)
+            self.assertEqual(sold.writes[0].address, SAVE_GILDER)
+            self.assertEqual(sold.writes[0].data, struct.pack("<h", 3 + price))
 
+        clipped = grant_of(stacked("Wonder Essence", 1, gilder=9900), "Wonder Essence")
+        self.assertEqual(clipped.next_state.gilder, 9999)
+        self.assertEqual(clipped.writes[0].data, struct.pack("<h", 9999))
+        self.assertEqual(
+            clipped.next_state.quantities[GAME_DATA.item_by_name["Wonder Essence"].in_game_id],
+            1,
+        )
+        capped = grant_of(stacked("Strength Tonic", 1, gilder=9999), "Strength Tonic")
+        self.assertEqual(capped.name, "20 Gilder for Strength Tonic")
+        self.assertEqual(capped.detail, "Gilders are already at maximum")
+        self.assertEqual([write.address for write in capped.writes], [INDEX_RECORD])
+        self.assertEqual(capped.next_state.gilder, 9999)
+        self.assertEqual(capped.next_state.quantities[GAME_DATA.item_by_name["Strength Tonic"].in_game_id], 1)
+        self.assertEqual(capped.next_state.received_index, 1)
+
+    def test_a_full_unique_is_counted(self) -> None:
         key = GAME_DATA.item_by_name["Key"]
         capped = grant_of(stacked("Key", 99), "Key")
         self.assertEqual(capped.detail, "Already carrying Key")
@@ -417,18 +464,18 @@ class ReceiveTests(unittest.TestCase):
         self.assertEqual(boots.next_state.quantities[GAME_DATA.item_by_name["Boots upgrade"].in_game_id], 0)
 
     def test_gilders_clamp_and_count_at_the_cap(self) -> None:
-        clipped = grant_of(playing(gold=9990), "30 Gilder")
-        self.assertEqual(clipped.next_state.gold, 9999)
-        self.assertEqual(clipped.writes[0].address, SAVE_GOLD)
+        clipped = grant_of(playing(gilder=9990), "30 Gilder")
+        self.assertEqual(clipped.next_state.gilder, 9999)
+        self.assertEqual(clipped.writes[0].address, SAVE_GILDER)
         self.assertEqual(clipped.writes[0].data, struct.pack("<h", 9999))
-        full = grant_of(playing(gold=9999), "1 Gilder")
+        full = grant_of(playing(gilder=9999), "1 Gilder")
         self.assertEqual(full.detail, "Gilders are already at maximum")
         self.assertEqual([write.address for write in full.writes], [INDEX_RECORD])
-        self.assertEqual(full.next_state.gold, 9999)
-        exact = grant_of(playing(gold=9969), "30 Gilder")
-        self.assertEqual(exact.next_state.gold, 9999)
-        one = grant_of(playing(gold=10), "1 Gilder")
-        self.assertEqual(one.next_state.gold, 11)
+        self.assertEqual(full.next_state.gilder, 9999)
+        exact = grant_of(playing(gilder=9969), "30 Gilder")
+        self.assertEqual(exact.next_state.gilder, 9999)
+        one = grant_of(playing(gilder=10), "1 Gilder")
+        self.assertEqual(one.next_state.gilder, 11)
         self.assertEqual(one.writes[0].data, struct.pack("<h", 11))
 
     def test_falcons_fill_pending_and_count_at_the_cap(self) -> None:

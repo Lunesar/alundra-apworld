@@ -63,11 +63,9 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
 ## APworld enhancements
 
-- [ ] Turn a full healing item into gilder instead of holding the receive queue.
+- [x] Turn a full healing item into gilder instead of holding the receive queue.
 
-  A remote Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, or Wonder Essence waits at the front of the queue while its stack is full (`_WAITS_WHEN_FULL` in `receive.py`, `Hold.NO_ROOM`). Grant that item's `goldValue` as gilder and count the receipt, using the same gilder write as a gilder pickup. The cap stays 9999. At the cap, count the receipt and add nothing.
-
-  The shop prices already on those items are the amounts: Herbs 5 (stack of 9), Strength Tonic 20, Magic Elixyr 30, Strength Elixyr 50, Wonder Essence 200. The other four cap at 1. A chest in this game still gives its item through the chest script. This change is the remote queue.
+  A remote Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, or Wonder Essence whose stack is already full adds that item's `goldValue` to the purse and counts the receipt. The write is the same s16 as a gilder pickup. The amounts are the shop prices: Herbs 5 (stack of 9), Strength Tonic 20, Strength Elixyr 50, Magic Elixyr 30, Wonder Essence 200. The other four cap at 1. The purse caps at 9999. At the cap, the receipt is counted and the purse stays. The stack stays full, so using one later opens a slot. A chest still gives its item through the chest script. This is the remote queue only.
 
 - [ ] Keep the restocking shelves vanilla, with an option to randomize them.
 

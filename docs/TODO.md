@@ -116,7 +116,7 @@ The Fairy Pond and the Book of Elna are marked in `world_shuffler.cpp`, `placeme
 
   Source 129 is the ground item on the table in Tarn's Manor (`spriteAddress` `1BA5D06`). It has no `eventCode`, so it comes back when the room loads again. `forbidPreciousItems` keeps it out of the check list. The patch already clears the byte at `0x1BA5D05`. Add an event code. Taking the book sets that flag, and entering the room again does not put the book back. The client then watches source 129.
 
-- [ ] Require the Iron Flail to get past the three-chest room in the Fire Wand and Bomb cave.
+- [x] Require the Iron Flail to get past the three-chest room in the Fire Wand and Bomb cave.
 
   The Fire Wand opens `overworld_a2_behind_vines`. A Bomb then opens `overworld_a2_behind_vines_and_bomb`. That node is one room too big. The three chests in the bridge cave can be taken with the wand and the Bomb and no flail:
 

@@ -1,9 +1,10 @@
 """Archipelago world for Alundra.
 
-Generation writes a placement seed map. The Alundra randomizer reads that file
-with --placement-in and patches a USA 1.1 disc. This world does not patch the
-disc. The BizHawk client logs in to a room, reports chests whose event
-code is known, and grants an item sent from another game.
+Generation writes a placement seed map as placement.json inside an .apalundra
+player container. The Alundra randomizer reads that JSON with --placement-in
+and patches a USA 1.1 disc. This world does not patch the disc. The BizHawk
+client logs in to a room, reports chests whose event code is known, and grants
+an item sent from another game.
 
 Another slot's item may be placed on an Alundra check. The placement file
 records that item as an object. A one-time shop shelf also records the gilder
@@ -14,14 +15,17 @@ also records this slot's player name and the apworld version beside the seed.
 from __future__ import annotations
 
 import logging
+import tempfile
+import zipfile
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from BaseClasses import CollectionState, Item, ItemClassification, Region, Tutorial
 from Options import OptionError
 from worlds.AutoWorld import WebWorld, World
+from worlds.Files import APPlayerContainer
 
 # Register AlundraClient with BizHawkClient
 from . import client
@@ -66,6 +70,28 @@ from .placement import (
 )
 
 logger = logging.getLogger("Archipelago")
+
+
+class AlundraContainer(APPlayerContainer):
+    """One slot's download. The room page serves this zip as the patch file.
+
+    archipelago.json comes from APPlayerContainer. placement.json is the
+    document --placement-in reads. The manifest's player is the slot number.
+    The document's player is the login name. Archipelago does not apply the
+    patch. alundra-randomizer does, from that JSON member.
+    """
+
+    game: ClassVar[str] = "Alundra"
+    patch_file_ending = ".apalundra"
+
+    def __init__(self, path: str | None = None, player: int | None = None,
+                 player_name: str = "", server: str = "", placement: bytes = b"") -> None:
+        super().__init__(path, player, player_name, server)
+        self.placement = placement
+
+    def write_contents(self, opened_zipfile: zipfile.ZipFile) -> None:
+        super().write_contents(opened_zipfile)
+        opened_zipfile.writestr("placement.json", self.placement)
 
 
 class AlundraWebWorld(WebWorld):
@@ -333,8 +359,19 @@ class AlundraWorld(World):
             self._precollected_names(),
             player=self.multiworld.get_player_name(self.player),
         )
-        filename = f"{self.multiworld.get_out_file_name_base(self.player)}.alundra.json"
-        write_placement(Path(output_directory) / filename, document)
+        # Manifest "player" is this slot's number. The document's "player" is the login name.
+        with tempfile.TemporaryDirectory() as directory:
+            placement_path = Path(directory) / "placement.json"
+            write_placement(placement_path, document)
+            placement = placement_path.read_bytes()
+        base = self.multiworld.get_out_file_name_base(self.player)
+        AlundraContainer(
+            path=str(Path(output_directory) / f"{base}{AlundraContainer.patch_file_ending}"),
+            player=self.player,
+            player_name=self.player_name,
+            server="",
+            placement=placement,
+        ).write()
 
     def fill_slot_data(self) -> dict[str, Any]:
         graph = self.logic_graph

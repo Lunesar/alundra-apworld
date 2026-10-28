@@ -8,13 +8,17 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   The randomizer writes the block when it patches a Multiworld placement file. The block is the first injected blob, so it stays at KSEG0 `0x8001F780` (MainRAM `0x1F780`). It holds the randomizer version, the apworld version, the placement seed, and the player name. `validate_rom` reads it in the same request as the `TryIncrease` prologue. A vanilla disc, an Alundra-format patch, and a block from an unknown apworld version are left alone. `set_auth` copies the player name into `ctx.auth`. After the room accepts the slot, the client compares the ROM seed with `slot_data["seed"]` and disconnects on a mismatch. The room host and port stay typed in the client.
 
-- [ ] Confirm the existing Archipelago generate UI writes the placement file.
+- [x] Confirm the Launcher generate writes the placement file.
 
-  `generate_output` writes `<slot>.alundra.json` into the generation output. The Archipelago Launcher generate window and the website both call that. Run one generate from each and confirm the zip contains the placement file. Add a separate generator only if one of those paths does not produce it.
+  The Launcher generate window calls `generate_output`. A generate of the YourName YAML wrote `AP_78189084152046214443.zip`. The zip contains `AP_78189084152046214443_P1_YourName.apalundra` and does not contain a bare `.alundra.json`. That file is a zip. `archipelago.json` has `"game": "Alundra"` and `"player": 1`. `placement.json` is the document `write_placement` produces. No separate generator is required for this path.
+
+- [ ] Confirm a generate on the Archipelago website writes the placement file, once Alundra is core.
+
+  The website calls the same `generate_output`. archipelago.gg rolls only worlds installed on that site, and Alundra is not among them until it is core. Uploading a Launcher zip already puts the container on a room. This item is a generate started on the site.
 
 - [ ] Add a patch window so the player does not run the randomizer from a command line.
 
-  The window takes the downloaded player file and a USA 1.1 disc, runs the patcher shipped in this world, and shows where the BIN/CUE was written. The placement file already carries the settings, so the window does not ask for a preset. The Archipelago Launcher hosts the window as a component, the same way other worlds add launcher entries.
+  The window takes the downloaded `.apalundra` file and a USA 1.1 disc, runs the patcher shipped in this world, and shows where the BIN/CUE was written. The placement file already carries the settings, so the window does not ask for a preset. The randomizer still reads `placement.json` through `--placement-in`, so the window opens the container and passes that member. The Archipelago Launcher hosts the window as a component, the same way other worlds add launcher entries.
 
 - [ ] Ship the world as `alundra.apworld`.
 
@@ -30,11 +34,11 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   `data.py` reads `data/*.json` with `importlib.resources`, so the same load works from the source tree and from the zip. `.apignore` leaves out `tests/`, `docs/TODO.md`, `README.md`, `data/README.md`, and `docs/client_memory.md`. The setup guide and the game page stay. `__pycache__` is already excluded by Archipelago. `data/` is a data folder next to `data.py`. It does not need an `__init__.py`.
 
-- [ ] Write the placement file as a player container with its own extension, so the room page offers it for download.
+- [x] Write the placement file as a player container with its own extension, so the room page offers it for download.
 
-  The share page prints "No file to download for this game." The Download column in `WebHostLib/templates/macros.html` links a file only when the slot bytes are an `APPlayerContainer`: a zip that holds `archipelago.json`, and whose `game` and `player` match the slot (`is_ap_player_container` in `worlds/Files.py`). `generate_output` writes a bare `AP_{seed}_P{n}_{name}.alundra.json`. Uploading the generation zip does store those bytes on the slot. The name matches the `AP_*_P{n}_*` rule in `WebHostLib/upload.py`. The page then rejects them because they are not that container.
+  `AlundraContainer` subclasses `APPlayerContainer`. `game` is `Alundra` and `patch_file_ending` is `.apalundra`. Archipelago does not apply the patch, so this is not an `APPatch` and `download_slot_file` has no Alundra branch. `generate_output` writes `AP_{seed}_P{n}_{Name}.apalundra`. `write_contents` writes `archipelago.json` through `APPlayerContainer` and `placement.json` beside it. The manifest `player` is the integer slot number. The placement document's `player`, on a Multiworld file, is the login name. `server` is empty at generate time, and `download_patch` fills it in when the file is downloaded.
 
-  Other worlds write one file per player whose name ends in their own extension, and that file is the zip. The Wind Waker writes `AP_{seed}_P{n}_{name}.aptww` through `TWWContainer`. Do the same here. `generate_output` writes `AP_{seed}_P{n}_{name}.apalundra`. The file is a zip. `archipelago.json` inside it names this game and this player, and the placement JSON is a member. The generation zip carries that one file. The room page then shows "Download Patch File..." and `download_patch` serves it, filling in the server address. The patcher shipped in this world opens the container and reads the placement member.
+  Uploading the Launcher zip to archipelago.gg created seed `3JFtaQxUR3OwviseWUDeIQ`. The room page shows Download Patch File... for the Alundra slot. The randomizer still reads `placement.json` through `--placement-in`. Opening the container is the patch window's job.
 
 - [ ] Ship the Linux and Windows patchers inside the apworld, and pick one at runtime.
 

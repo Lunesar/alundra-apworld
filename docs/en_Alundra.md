@@ -12,10 +12,10 @@ Crests past the crest count are already on their pedestals when the file is new.
 
 ## What generation produces
 
-A JSON placement file inside the generation zip, named from the slot plus `.alundra.json`. Patch it with the randomizer:
+A player file inside the generation zip, named from the slot plus `.apalundra`. The room page offers that file as Download Patch File. The file is a zip. `archipelago.json` inside it records this game and the integer slot number. `placement.json` beside it is the placement document the randomizer reads:
 
 ```
-alundra-randomizer --placement-in=THAT_FILE.json
+alundra-randomizer --placement-in=placement.json
 ```
 
 You need your own USA 1.1 disc image. The world does not contain one.
@@ -28,7 +28,7 @@ Another slot's item can be placed on an Alundra check. The file is then the Mult
 
 The disc shows "player - item", so those names are kept to 16 and 28 printable ASCII characters. Every other entry is still the in-game item id. `itemsDistribution` counts only those ids. A file of only in-game ids stays the Alundra format (`"format": 1`).
 
-The Multiworld format also names this slot, beside `seed`. `apworldVersion` is the `world_version` of the world that wrote the file, `major.minor.patch`. `player` is this slot's name, the string the room expects at login. It is not shortened, and it is not the `player` inside a placement. That one is the other slot, kept to 16 printable ASCII characters for the disc line. The Alundra format does not include `apworldVersion` or `player`.
+The Multiworld format also names this slot, beside `seed`. `apworldVersion` is the `world_version` of the world that wrote the file, `major.minor.patch`. `player` is this slot's name, the string the room expects at login. It is not shortened, and it is not the `player` inside a placement. That one is the other slot, kept to 16 printable ASCII characters for the disc line. The manifest in `archipelago.json` records this same slot as an integer. The Alundra format does not include `apworldVersion` or `player`.
 
 When the randomizer patches from a Multiworld file, it writes that version, that player, and that seed into the executable. The BizHawk client reads them. It logs in as that player, and it disconnects if the room's seed is different. A file of only Alundra items has no slot block on the disc.
 

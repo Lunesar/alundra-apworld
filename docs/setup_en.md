@@ -39,10 +39,10 @@ A remote item on Naomi's Item #4, Lurvy's Item #5, or the Life Vessel that repla
 
 ## Patch
 
-Unzip the generation output. Inside is a file whose name ends in `.alundra.json`. From the randomizer directory, with the disc image in place:
+The generation zip holds one file per Alundra slot. Its name looks like `AP_{seed}_P{n}_{Name}.apalundra`. The room page offers that file as Download Patch File. The file is a zip. `placement.json` inside it is the placement document. The randomizer reads that document from a path. Unzip the `.apalundra` file, then from the randomizer directory, with the disc image in place:
 
 ```
-alundra-randomizer --placement-in=/path/to/the-file.alundra.json --nopause
+alundra-randomizer --placement-in=/path/to/placement.json --nopause
 ```
 
 The randomizer writes the patched BIN/CUE and, unless you turned the spoiler off, the hint log. The placement file already contains the settings, so do not also pass `--preset`.

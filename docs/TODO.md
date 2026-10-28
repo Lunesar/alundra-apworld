@@ -4,20 +4,9 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
 ## Quality of life
 
-- [ ] Embed a slot block in the patched executable, and have the BizHawk client read it.
+- [x] Embed a slot block in the patched executable, and have the BizHawk client read it.
 
-  `validate_rom` in `client.py` accepts any image whose `TryIncrease` prologue at MainRAM `0x4FBE4` is `addiu sp, sp, -32`. A vanilla USA 1.1 disc passes that check. The world does not override `set_auth`, so after the client connects to BizHawk the player types the room address and then the slot name.
-
-  The randomizer writes the block when it patches. The client reads it from MainRAM at the same time it reads `TryIncrease`, which means the bytes live in the loaded executable. The block holds:
-
-  - randomizer version
-  - apworld version (`world_version` in `archipelago.json`)
-  - seed (the placement file seed, also sent in `fill_slot_data`)
-  - player name
-
-  `validate_rom` requires the block, so a vanilla disc is left alone. A block whose apworld version this client does not know is left alone. `set_auth` copies the player name into `ctx.auth`, which skips the `Enter slot name:` prompt. After the room accepts the slot, the client compares the ROM seed with `slot_data["seed"]` and disconnects on a mismatch.
-
-  The room host and port stay typed in the client. The server expects the YAML name unchanged. Remote item lines on the disc already keep a player name to 16 printable ASCII characters. The name stored for login is the full slot name.
+  The randomizer writes the block when it patches a Multiworld placement file. The block is the first injected blob, so it stays at KSEG0 `0x8001F780` (MainRAM `0x1F780`). It holds the randomizer version, the apworld version, the placement seed, and the player name. `validate_rom` reads it in the same request as the `TryIncrease` prologue. A vanilla disc, an Alundra-format patch, and a block from an unknown apworld version are left alone. `set_auth` copies the player name into `ctx.auth`. After the room accepts the slot, the client compares the ROM seed with `slot_data["seed"]` and disconnects on a mismatch. The room host and port stay typed in the client.
 
 - [ ] Confirm the existing Archipelago generate UI writes the placement file.
 

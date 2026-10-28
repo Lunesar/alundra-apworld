@@ -17,6 +17,8 @@ import worlds._bizhawk as bizhawk
 from NetUtils import ClientStatus
 from worlds._bizhawk.client import BizHawkClient
 
+from Utils import async_start
+
 from .checks import (
     EVENT_FLAGS,
     GOAL_PHASE,
@@ -26,7 +28,9 @@ from .checks import (
     game_beaten,
     names_for,
 )
-from .receive import READS, Hold, hold_message, parse_play_state, pending_ap_id, plan
+from .placement import apworld_version
+from .receive import READS, Hold, checks_ready, hold_message, parse_play_state, pending_ap_id, plan
+from .slot import SLOT_MAIN_RAM, SLOT_SIZE, parse_slot_block, room_seed_matches
 
 logger = logging.getLogger("Client")
 
@@ -69,24 +73,65 @@ class AlundraClient(BizHawkClient):
         self._stable = None
         # Hold lines already logged for this connection.
         self._holds: set[str] = set()
+        # Slot read from the executable. None until a block this client knows is loaded.
+        self._slot = None
+        self._noted_missing_block = False
+        self._unknown_version: str | None = None
+        self._client_version: str | None = None
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
-        """Claim the image when the TryIncrease prologue matches."""
+        """Claim the image when it is this client's patched executable.
+
+        The TryIncrease prologue distinguishes Alundra from another PlayStation
+        image. The slot block distinguishes a Multiworld patch from a vanilla
+        disc. A block written by an apworld version this client is not is left
+        alone.
+        """
         try:
-            # First instruction of TryIncrease, addiu sp, sp, -32 at MainRAM 0x4FBE4.
-            # A match is what distinguishes an Alundra executable from another PlayStation image.
-            prologue = (await bizhawk.read(
+            # One read: the prologue and the block are both in the loaded executable.
+            prologue, block_bytes = await bizhawk.read(
                 ctx.bizhawk_ctx,
-                [(_TRY_INCREASE, len(_TRY_INCREASE_PROLOGUE), _MAIN_RAM)],
-            ))[0]
+                [
+                    (_TRY_INCREASE, len(_TRY_INCREASE_PROLOGUE), _MAIN_RAM),
+                    (SLOT_MAIN_RAM, SLOT_SIZE, _MAIN_RAM),
+                ],
+            )
         except _READ_ERRORS:
             return False
         if prologue != _TRY_INCREASE_PROLOGUE:
             return False
+        block = parse_slot_block(block_bytes)
+        if block is None:
+            self._slot = None
+            if not self._noted_missing_block:
+                self._noted_missing_block = True
+                logger.info("This disc has no Alundra slot block. The handler leaves it alone.")
+            return False
+        if self._client_version is None:
+            self._client_version = apworld_version()
+        if block.apworld_version != self._client_version:
+            self._slot = None
+            if block.apworld_version != self._unknown_version:
+                self._unknown_version = block.apworld_version
+                logger.info(
+                    "This ROM was patched by alundra-apworld %s, and this client is %s.",
+                    block.apworld_version,
+                    self._client_version,
+                )
+            return False
 
+        self._slot = block
+        self._noted_missing_block = False
+        self._unknown_version = None
         ctx.game = self.game
         ctx.items_handling = _ITEMS_FROM_OTHER_WORLDS
         return True
+
+    async def set_auth(self, ctx: "BizHawkClientContext") -> None:
+        """Log in as the player named in the slot block."""
+        if self._slot is None:
+            return
+        ctx.auth = self._slot.player
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
         """Report checked locations, grant one queued remote item, and send the goal."""
@@ -97,13 +142,16 @@ class AlundraClient(BizHawkClient):
         if not watching and not received and not send_goal:
             return
         flag = flag_read() if watching else None
+        # Checks use the same ready gate as a grant. The flag array is work
+        # RAM, and it can hold bits until new-game setup clears it.
+        need_play = flag is not None or bool(received)
         reads: list[tuple[int, int, str]] = []
         if send_goal:
             reads.append((GOAL_PHASE, 4, _MAIN_RAM))
         if flag is not None:
             offset, length = flag
             reads.append((offset, length, _MAIN_RAM))
-        if received:
+        if need_play:
             reads.extend((address, size, _MAIN_RAM) for address, size in READS)
         if not reads:
             return
@@ -116,16 +164,22 @@ class AlundraClient(BizHawkClient):
             if game_beaten(read_bytes[cursor]):
                 await self._complete_goal(ctx)
             cursor += 1
+        flag_bytes = None
         if flag is not None:
+            flag_bytes = read_bytes[cursor]
+            cursor += 1
+        play_bytes: list[bytes] = []
+        if need_play:
+            play_bytes = read_bytes[cursor:cursor + len(READS)]
+        if flag is not None and flag_bytes is not None and checks_ready(play_bytes):
             offset, _length = flag
-            sent = await ctx.check_locations(checked_locations(read_bytes[cursor], offset - EVENT_FLAGS))
+            sent = await ctx.check_locations(checked_locations(flag_bytes, offset - EVENT_FLAGS))
             unreported = sent - self._reported
             if unreported:
                 self._reported.update(unreported)
                 logger.info("Checked %s.", ", ".join(names_for(unreported)))
-            cursor += 1
         if received:
-            await self._receive(ctx, read_bytes[cursor:], received)
+            await self._receive(ctx, play_bytes, received)
 
     async def _complete_goal(self, ctx: "BizHawkClientContext") -> None:
         """Tell the room the ending was requested.
@@ -196,6 +250,17 @@ class AlundraClient(BizHawkClient):
 
     def on_package(self, ctx: "BizHawkClientContext", cmd: str, args: dict) -> None:
         if cmd != "Connected":
+            return
+        rom_seed = None if self._slot is None else self._slot.seed
+        if rom_seed is None or not room_seed_matches(rom_seed, ctx.slot_data):
+            room_seed = ctx.slot_data.get("seed") if isinstance(ctx.slot_data, dict) else None
+            logger.info(
+                "This ROM was patched from seed %s, and the room sent seed %s. Disconnecting.",
+                rom_seed,
+                room_seed,
+            )
+            ctx.auth = None
+            async_start(ctx.disconnect(), name="seed mismatch")
             return
         # A new room has its own missing list and its own received items.
         # The saved count still says what this file has already been granted.

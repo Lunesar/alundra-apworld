@@ -44,6 +44,7 @@ from alundra.receive import (
     Grant,
     Hold,
     PlayState,
+    checks_ready,
     decode_index,
     gameplay_ready,
     grant_life_vessel,
@@ -260,6 +261,11 @@ class ReceiveTests(unittest.TestCase):
             Hold.GAMEPLAY,
         )
         self.assertTrue(gameplay_ready(playing(requested_map=0, loaded_map=0)))
+        self.assertTrue(checks_ready(pack_play_state(playing())))
+        self.assertFalse(checks_ready(pack_play_state(playing(hud_allowed=False))))
+        self.assertFalse(checks_ready(pack_play_state(playing(text_window_a=1))))
+        self.assertFalse(checks_ready(pack_play_state(playing())[:-1]))
+        self.assertFalse(checks_ready([]))
         self.assertIsInstance(plan(playing(requested_map=0, loaded_map=0), self.vessel.ap_id), Grant)
         self.assertIsInstance(plan(playing(equipped=-1), self.vessel.ap_id), Grant)
         self.assertIsNone(hold_message(Hold.GAMEPLAY, self.vessel.ap_id))

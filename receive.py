@@ -269,6 +269,12 @@ def _pack_inventory(quantities: Sequence[int]) -> bytes:
 # True when a grant can land. Map ids may be 0: once they match, the HUD flag,
 # the menu and text words, and the two HP pairs are what keep a grant waiting.
 def gameplay_ready(state: PlayState) -> bool:
+    """True when Alundra has control and the save fields are a live game.
+
+    The check watch and a remote grant both use this. Startup RAM can hold
+    flag bits before new-game setup clears them, and a text box or a menu
+    means the player does not have control yet.
+    """
     if not state.hud_allowed:
         return False
     if state.requested_map != state.loaded_map:
@@ -290,6 +296,16 @@ def gameplay_ready(state: PlayState) -> bool:
     if len(state.quantities) != ITEM_COUNT:
         return False
     return all(0 <= qty <= MAX_STACK for qty in state.quantities)
+
+
+# True when these read buffers are a live game. A short read is not ready,
+# so a check watch before the play-state read completes sends nothing.
+def checks_ready(read_bytes: Sequence[bytes]) -> bool:
+    if len(read_bytes) != len(READS):
+        return False
+    if any(len(data) != size for (_, size), data in zip(READS, read_bytes)):
+        return False
+    return gameplay_ready(parse_play_state(read_bytes))
 
 
 def name_for(ap_id: int) -> str:

@@ -53,7 +53,13 @@ from .logic import (
     folded_item_names,
 )
 from .options import AlundraOptions, option_groups
-from .placement import OutsidePlacement, allows_outside_item, build_placement_document, write_placement
+from .placement import (
+    OutsidePlacement,
+    forbid_progression,
+    allows_outside_item,
+    build_placement_document,
+    write_placement,
+)
 
 logger = logging.getLogger("Archipelago")
 
@@ -456,6 +462,12 @@ class AlundraWorld(World):
             if shop and record.gold_value == 0:
                 return False
             if merrick and record.in_game_id == GILDED_FALCON_ID:
+                return False
+            if forbid_progression(
+                forbid_precious=forbid_precious,
+                name=record.name,
+                progression=progression,
+            ):
                 return False
             if block_progression and record.name in progression:
                 return False

@@ -86,11 +86,11 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   Lurvy sells all five healing items. Wonder Essence is the shelf that replaces the unique slot after it has been bought twice. Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Strength Elixyr and Wonder Essence are bought at Lurvy. The patch already obeys the item id in the placement file, so this option lives in the apworld.
 
-- [ ] Keep a key item off a restocking shelf.
+- [x] Keep a progression item off a source that is not a check.
 
-  This matters when `restocking_shop_items` is randomized, and for the three shelves full variety still fills from the pool. Vanilla locks every shelf to a healing item.
+  `forbid_progression` returns true when the source sets `forbidPreciousItems` and the item is progression. That set is the restocking shelves, the table in Tarn's Manor, and the Fairy Pond chests. The fill uses that rule, so the only copy stays on a location the client reports. A one-time shelf may still sell one. When the pond and the table gain a collected flag, `forbidPreciousItems` comes off and a progression item can land there.
 
-  A restocking shelf refuses a precious item and an item whose gold value is 0. The Tree Gem is neither. Its gold value is 150, and the path from `overworld_a3_left_behind_power_glove` to `overworld_a2` requires it, so a seed can place the only copy on Lurvy's repeatable stock. Buying it does not use up a check, and the shelf offers it again. The Small Key, the Sluice Key, the Elevator Key, the Curious Key, Jess's Letter, and Zolist's Stone already have no gold value, so every shop refuses them. The Bouquet and the Secret Pass have a gold value and are not precious, and a path requires each of them, so they can land on the same shelves. The seven crests can too. Their gold values run from 800 to 1500, and they are not marked precious. When a restocking shelf is filled from the pool, it still refuses these items. A one-time shelf may still sell one.
+  The names come from the logic graph, so progressive items and the crest list follow the seed. A useful item that opens nothing, such as Olga's Ring, can still fill one of the three shelves full variety leaves open. Vanilla locks every shelf to a healing item. `precious` stays the abuse flag in `item.json`, and the standalone randomizer is unchanged.
 
 - [ ] Give a remote shop item a price the player can pay when the item is needed early.
 
@@ -125,3 +125,7 @@ The Fairy Pond and the Book of Elna are marked in `world_shuffler.cpp`, `placeme
   | 88 | Overworld A2: Right chest in bridge cave with 3 chests |
 
   Getting past that room takes the Iron Flail. The same node also holds the spikeball chest, the upper chest, both chests among the trees, and the chest after the Stone Golem (ids 89–93), and its two-way edge opens `overworld_a1` with nothing required. `overworld_a1` then opens `great_tree_tower`. Split the node so 86–88 stay on the Bomb side. Put a new edge behind them that requires the Iron Flail, and move the exit to A1 onto that far side. A check that is past the room moves with the exit. A check that is in the room with the three chests stays. Other flail gates in `world_path.json` name the Iron Flail. Progressive mode already treats a flail upgrade as that item. There is also a one-way edge from the Bomb node back to `overworld_a2`. Keep it from skipping the flail. Edit the randomizer's graph, then copy `world_path.json`, `world_node.json`, and `item_source.json` here.
+
+- [ ] Stop Lurvy from selling an Alundra item whose stack is already full.
+
+  In a multiworld seed, Lurvy completed a purchase of an item the player could not hold any more of. A remote sale is allowed to do that. `install_remote_shop_receive` in `patch_apply_item_sources.cpp` runs whenever the seed contains a remote item. Shop opcode `0x82` calls it with the item id in `a0`. The remote id returns 1 and never reaches the retail receive call at `0x80034814`, because a remote item is not a stack and the retail check treats "the quantity did not grow" as a failed sale. Any other id is supposed to jump to that retail call with `a0` unchanged, and the sale fails when the stack does not grow. The call site's delay slot, `addu s0, a3, zero`, stays in place. A full stack of an Alundra item, such as 9 Herbs or a second Elixyr, has to be refused and the gilder left unspent. The gilder payout for a full healing item is the client's receive path. It does not run when the shop itself makes the sale.

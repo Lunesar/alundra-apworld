@@ -45,6 +45,20 @@ class OutsidePlacement:
     flags: int
 
 
+def forbid_progression(
+    *, forbid_precious: bool, name: str, progression: frozenset[str],
+) -> bool:
+    """A source that is not a check refuses this progression item.
+
+    forbidPreciousItems marks the restocking shelves, the table in Tarn's
+    Manor, and every Fairy Pond chest. Those sources are filled, then left
+    out of the location list, so the room never hears about the item. A
+    check may still hold one. When the pond and the table gain a collected
+    flag, forbidPreciousItems comes off and this refusal lifts.
+    """
+    return forbid_precious and name in progression
+
+
 def allows_outside_item(
     *, block_progression: bool, progression: bool, forbid_precious: bool = False,
 ) -> bool:

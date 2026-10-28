@@ -144,8 +144,10 @@ class RestockingShopItems(Choice):
     healing item purchasable. One each of Herbs, Strength Tonic, Strength
     Elixyr, Magic Elixyr, and Wonder Essence is always somewhere on them, in
     any order, at either shop. The other three shelves are filled from the
-    item pool. A full stack of one of these, sent from another game, is sold
-    for gilder. These shelves are where the player buys a replacement.
+    item pool. They refuse a progression item. A useful item such as a ring
+    can still land on one. A full stack of one of these healing items, sent
+    from another game, is sold for gilder. These shelves are where the player
+    buys a replacement.
 
     Vanilla keeps their retail stock, and that stock can be bought again.
     Lurvy sells all five of those items. Naomi sells Herbs, Strength Tonic,
@@ -153,7 +155,8 @@ class RestockingShopItems(Choice):
     that shelf has been bought twice.
 
     Randomized fills all eight shelves from the item pool. They are still not
-    checks, and they still refuse a precious item and an item from another slot.
+    checks, and they still refuse a precious item, a progression item, and an
+    item from another slot.
     The one-time shelves stay checks in every mode. Merrick's trades are checks
     and are not part of this option.
     """

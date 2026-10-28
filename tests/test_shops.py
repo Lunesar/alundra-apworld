@@ -26,10 +26,12 @@ from alundra.data import GAME_DATA, HEALING_ITEMS, LOCATION_NAME_TO_ID, restocki
 from alundra.logic import (
     LogicError,
     LogicSettings,
+    build_graph,
     build_item_pool,
     choose_restock_locks,
     resolved_restock_locks,
 )
+from alundra.placement import forbid_progression
 from alundra.receive import _SOLD_WHEN_FULL
 
 
@@ -187,6 +189,56 @@ class RestockingShopTests(unittest.TestCase):
         with self.assertRaises(LogicError) as caught:
             build_item_pool(GAME_DATA, settings)
         self.assertIn("restocking shelves", str(caught.exception))
+
+    def test_unreported_sources_refuse_progression_items(self) -> None:
+        # The room never hears about these placements. A ring opens nothing,
+        # so it can still fill one. A check may still hold a progression item.
+        progression = build_graph(GAME_DATA, LogicSettings()).progression_items
+        self.assertIn("Tree Gem", progression)
+        self.assertIn("Bomb", progression)
+        self.assertIn("Small Key", progression)
+        self.assertIn("Ruby Crest", progression)
+        self.assertNotIn("Olga's Ring", progression)
+        self.assertNotIn("Herbs", progression)
+        unreported = [source for source in GAME_DATA.sources if source.forbid_precious]
+        unreported_ids = {source.id for source in unreported}
+        self.assertTrue({129, *range(139, 146)} <= unreported_ids)
+        self.assertTrue(any(source.has_price for source in unreported))
+        for source in unreported:
+            self.assertTrue(forbid_progression(
+                forbid_precious=source.forbid_precious,
+                name="Tree Gem",
+                progression=progression,
+            ), source.name)
+            self.assertTrue(forbid_progression(
+                forbid_precious=source.forbid_precious,
+                name="Small Key",
+                progression=progression,
+            ), source.name)
+            self.assertFalse(forbid_progression(
+                forbid_precious=source.forbid_precious,
+                name="Olga's Ring",
+                progression=progression,
+            ), source.name)
+        one_time = GAME_DATA.source_by_id[266]
+        self.assertTrue(one_time.has_price)
+        self.assertFalse(one_time.forbid_precious)
+        self.assertFalse(forbid_progression(
+            forbid_precious=one_time.forbid_precious,
+            name="Tree Gem",
+            progression=progression,
+        ))
+        plain = build_graph(
+            GAME_DATA, LogicSettings(progressive_items=False),
+        ).progression_items
+        self.assertIn("Hunter's Bow", plain)
+        self.assertNotIn("Willow Bow", plain)
+        self.assertTrue(forbid_progression(
+            forbid_precious=True, name="Hunter's Bow", progression=plain,
+        ))
+        self.assertFalse(forbid_progression(
+            forbid_precious=True, name="Willow Bow", progression=plain,
+        ))
 
 
 if __name__ == "__main__":

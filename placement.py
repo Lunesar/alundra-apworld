@@ -9,13 +9,23 @@ player is 1..16 printable ASCII characters and item is 1..28, with no backslash.
 classification is progression, useful, filler, or trap. A one-time shop shelf
 also records price, the gilder that shelf charges. itemsDistribution counts
 only the in-game ids.
+
+The Multiworld format also names the slot that wrote it, beside seed:
+
+    "apworldVersion": "0.1.5", "player": "YourName", "seed": 1
+
+apworldVersion is world_version from archipelago.json. player is this slot's
+login name, kept whole. It is not the shortened player on a remote placement.
+The Alundra format does not carry those two fields.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 
 from .data import GAME_DATA, ITEM_COUNT, REQUIRED_STARTING_ITEMS, GameData
@@ -35,6 +45,8 @@ _TRAP = 0b00100
 # The JSON field is numeric. These names are the Alundra format and the Multiworld format.
 FORMAT_ALUNDRA = 1
 FORMAT_MULTIWORLD = 2
+# world_version in archipelago.json. Three numeric components, nothing else.
+_APWORLD_VERSION = re.compile(r"\d+\.\d+\.\d+")
 
 
 @dataclass(frozen=True)
@@ -188,6 +200,40 @@ def _check_seed(seed: int) -> None:
         raise PlacementError("Placement seed must fit in an unsigned 32-bit value.")
 
 
+def apworld_version() -> str:
+    """Return world_version from archipelago.json, the version that writes the file."""
+    resource = files(__package__).joinpath("archipelago.json")
+    try:
+        text = resource.read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise PlacementError(
+            "archipelago.json is missing, so the placement file has no apworld version."
+        ) from error
+    try:
+        manifest = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise PlacementError(f"archipelago.json is malformed: {error}") from error
+    version = manifest.get("world_version") if isinstance(manifest, dict) else None
+    if not isinstance(version, str) or _APWORLD_VERSION.fullmatch(version) is None:
+        raise PlacementError(
+            f"world_version {version!r} in archipelago.json must be major.minor.patch."
+        )
+    return version
+
+
+def _check_slot_player(player: object) -> str:
+    """Return this slot's login name.
+
+    The room matches this string unchanged. It is not run through the disc-line
+    limit that shortens a remote placement's player.
+    """
+    if not isinstance(player, str) or not player.strip():
+        raise PlacementError("The Multiworld placement file needs this slot's player name.")
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in player):
+        raise PlacementError("The slot player name cannot contain a control character.")
+    return player
+
+
 def _check_location_ids(placements: dict[int, int | OutsidePlacement], game_data: GameData) -> None:
     expected = {source.id for source in game_data.sources}
     got = set(placements)
@@ -291,8 +337,15 @@ def build_placement_document(
     placements: dict[int, int | OutsidePlacement],
     starting_inventory: list[str],
     game_data: GameData = GAME_DATA,
+    *,
+    player: str | None = None,
 ) -> dict:
-    """Return the JSON object --placement-in accepts."""
+    """Return the JSON object --placement-in accepts.
+
+    A remote item selects the Multiworld format. That file records apworldVersion
+    and this slot's player beside seed. The Alundra format leaves both out, and
+    a player passed for that format is not written.
+    """
     _check_seed(settings.seed)
     _check_location_ids(placements, game_data)
     encoded, counted = _encode_placements(placements, game_data)
@@ -301,12 +354,19 @@ def build_placement_document(
     _check_required_starting_items(inventory)
     # A remote item selects the Multiworld format. Otherwise the file stays the Alundra format.
     remote = any(isinstance(placed, OutsidePlacement) for placed in placements.values())
-    return {
-        "format": FORMAT_MULTIWORLD if remote else FORMAT_ALUNDRA,
+    body = {
         "seed": settings.seed,
         "gameSettings": _game_settings(settings),
         "randomizerSettings": _randomizer_settings(settings, inventory, counted),
         "placements": encoded,
+    }
+    if not remote:
+        return {"format": FORMAT_ALUNDRA, **body}
+    return {
+        "format": FORMAT_MULTIWORLD,
+        "apworldVersion": apworld_version(),
+        "player": _check_slot_player(player),
+        **body,
     }
 
 

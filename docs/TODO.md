@@ -1,6 +1,6 @@
 # Before full release
 
-The playable beta generates a placement file, patches a USA 1.1 disc from the command line, and connects a BizHawk client. `archipelago.json` is world version 0.1.0. This is the work to finish before that version leaves beta.
+The playable beta generates a placement file, patches a USA 1.1 disc from the command line, and connects a BizHawk client. `archipelago.json` is world version 0.1.5. This is the work to finish before that version leaves beta.
 
 ## Quality of life
 

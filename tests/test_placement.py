@@ -29,6 +29,7 @@ from alundra.placement import (
     OutsidePlacement,
     PlacementError,
     allows_outside_item,
+    apworld_version,
     build_placement_document,
     remote_shop_price,
     remote_shop_price_applies,
@@ -45,11 +46,12 @@ def _native_placements() -> dict[int, int]:
     }
 
 
-def _document(placements: dict) -> dict:
+def _document(placements: dict, *, player: str | None = "YourName") -> dict:
     return build_placement_document(
         LogicSettings(),
         placements,
         list(REQUIRED_STARTING_ITEMS),
+        player=player,
     )
 
 
@@ -57,11 +59,62 @@ class PlacementTests(unittest.TestCase):
     def test_native_file_stays_item_ids(self) -> None:
         document = _document(_native_placements())
         self.assertEqual(document["format"], FORMAT_ALUNDRA)
+        self.assertNotIn("apworldVersion", document)
+        self.assertNotIn("player", document)
+        self.assertIn("seed", document)
         self.assertTrue(all(isinstance(value, int) for value in document["placements"].values()))
         self.assertEqual(
             sum(document["randomizerSettings"]["itemsDistribution"].values()),
             len(GAME_DATA.sources),
         )
+
+    def test_multiworld_file_records_slot_identity(self) -> None:
+        placements = _native_placements()
+        source = GAME_DATA.sources[0]
+        placements[source.id] = OutsidePlacement(
+            player="Very Long Player Name",
+            item="Key Item",
+            flags=0b00001,
+        )
+        document = build_placement_document(
+            LogicSettings(seed=7),
+            placements,
+            list(REQUIRED_STARTING_ITEMS),
+            player="Néstor\\Room",
+        )
+        self.assertEqual(
+            list(document),
+            [
+                "format",
+                "apworldVersion",
+                "player",
+                "seed",
+                "gameSettings",
+                "randomizerSettings",
+                "placements",
+            ],
+        )
+        self.assertEqual(document["format"], FORMAT_MULTIWORLD)
+        self.assertEqual(document["apworldVersion"], apworld_version())
+        self.assertEqual(apworld_version(), "0.1.5")
+        # The login name is kept whole. The disc line on the placement is not.
+        self.assertEqual(document["player"], "Néstor\\Room")
+        self.assertEqual(document["seed"], 7)
+        self.assertEqual(document["placements"][str(source.id)]["player"], "Very Long Player")
+        self.assertEqual(len(document["placements"][str(source.id)]["player"]), 16)
+
+    def test_multiworld_file_requires_a_slot_name(self) -> None:
+        placements = _native_placements()
+        placements[GAME_DATA.sources[0].id] = OutsidePlacement(player="Bea", item="Orb", flags=0)
+        with self.assertRaises(PlacementError):
+            build_placement_document(
+                LogicSettings(),
+                placements,
+                list(REQUIRED_STARTING_ITEMS),
+            )
+        for name in ("", "   ", "Your\nName", "Your\x7fName", 1):
+            with self.assertRaises(PlacementError):
+                _document(placements, player=name)
 
     def test_outside_item_is_an_object_and_is_not_counted(self) -> None:
         placements = _native_placements()

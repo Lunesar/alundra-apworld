@@ -6,7 +6,8 @@ disc. The BizHawk client logs in to a room, reports chests whose event
 code is known, and grants an item sent from another game.
 
 Another slot's item may be placed on an Alundra check. The placement file
-records that item as an object. This slot's own items stay in-game item ids.
+records that item as an object. A one-time shop shelf also records the gilder
+it charges. This slot's own items stay in-game item ids.
 """
 
 from __future__ import annotations
@@ -57,6 +58,8 @@ from .placement import (
     OutsidePlacement,
     forbid_progression,
     allows_outside_item,
+    remote_shop_price_applies,
+    remote_shop_price_for,
     build_placement_document,
     write_placement,
 )
@@ -271,7 +274,33 @@ class AlundraWorld(World):
             if GAME_DATA.source_by_id[source_id].forbid_precious:
                 location.address = None
 
+    def _accessibility_spheres(self) -> dict[int, int]:
+        """1-based sphere of each of this slot's sendable checks.
+
+        This is the sweep the room's sphere tracker stores. Events, including
+        the visit items on each node, are collected before the checks that
+        open in the same step. An empty yield is the gap before unreachable
+        checks, and those checks take the next number.
+        """
+        spheres: dict[int, int] = {}
+        number = 0
+        for sphere in self.multiworld.get_sendable_spheres():
+            if not sphere:
+                continue
+            number += 1
+            for location in sphere:
+                if location.player != self.player:
+                    continue
+                source_id = getattr(location, "source_id", None)
+                if source_id is None:
+                    continue
+                spheres[source_id] = number
+        return spheres
+
     def generate_output(self, output_directory: str) -> None:
+        # pre_output has already cleared the shelves that are not checks, so
+        # this sweep matches the sphere list written for the room.
+        spheres = self._accessibility_spheres()
         placements: dict[int, int | OutsidePlacement] = {}
         for location in self.multiworld.get_locations(self.player):
             source_id = getattr(location, "source_id", None)
@@ -294,7 +323,7 @@ class AlundraWorld(World):
                     f"Alundra location '{location.name}' holds {item.name} for player {item.player}. "
                     "A check that refuses a precious item also refuses a remote item."
                 )
-            placements[source_id] = self._outside_placement(item)
+            placements[source_id] = self._outside_placement(item, source, spheres.get(source_id))
 
         document = build_placement_document(
             self._settings,
@@ -484,16 +513,29 @@ class AlundraWorld(World):
             return None
         return item.in_game_id
 
-    def _outside_placement(self, item: Item) -> OutsidePlacement:
+    def _outside_placement(
+        self, item: Item, source: ItemSourceRecord, sphere: int | None,
+    ) -> OutsidePlacement:
         code = item.code
         if isinstance(code, bool) or not isinstance(code, int) or code <= 0:
             raise RuntimeError(
                 f"Item {item.name} for player {item.player} has no Archipelago item id."
             )
+        flags = int(item.classification)
+        price = None
+        if remote_shop_price_applies(
+            has_price=source.has_price, forbid_precious=source.forbid_precious,
+        ):
+            if sphere is None:
+                raise RuntimeError(
+                    f"Alundra location '{source.pretty_name}' has no accessibility sphere."
+                )
+            price = remote_shop_price_for(flags, sphere)
         return OutsidePlacement(
             player=self.multiworld.get_player_name(item.player),
             item=item.name,
-            flags=int(item.classification),
+            flags=flags,
+            price=price,
         )
 
     def _precollected_counts(self) -> Counter[str]:

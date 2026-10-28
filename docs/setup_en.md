@@ -33,6 +33,8 @@ An empty `Alundra` block uses the same defaults as the website's Default preset.
 
 A seed can include other games. Another slot's item may land on an Alundra check. A source that is not a check refuses a precious item, a progression item, and a remote item: a restocking shelf that the fill chooses, the item on the table in Tarn's Manor, and the Fairy Pond chests. The placement file uses the Multiworld format when it contains a remote item, and the Alundra format when every Alundra check holds an Alundra item.
 
+A remote item on Naomi's Item #4, Lurvy's Item #5, or the Life Vessel that replaces that shelf has a `price` in the placement object. The patch writes that gilder cost. A progression item costs 100 in sphere 1, 200 in sphere 2, 300 in sphere 3, 400 in sphere 4, and 500 from sphere 5 on. A useful item costs 250. A filler item costs 100. A trap costs 50. An Alundra item on those shelves keeps its own gold value.
+
 `local_items` in the YAML keeps a named Alundra item in this slot. Listing every Alundra item there fills every check, so another slot's item has nowhere to land and generation fails.
 
 ## Patch

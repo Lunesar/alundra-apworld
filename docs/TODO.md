@@ -92,11 +92,11 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   The names come from the logic graph, so progressive items and the crest list follow the seed. A useful item that opens nothing, such as Olga's Ring, can still fill one of the three shelves full variety leaves open. Vanilla locks every shelf to a healing item. `precious` stays the abuse flag in `item.json`, and the standalone randomizer is unchanged.
 
-- [ ] Give a remote shop item a price the player can pay when the item is needed early.
+- [x] Give a remote shop item a price the player can pay when the item is needed early.
 
-  Naomi's Item #4 held another player's item that the seed needed early, and the shelf charged 500 gilder. The other player waited while this player ground the money. That shelf is a legal check. The price is the problem. A remote item has no gold value, so `patch_apply_item_sources` leaves the disc's price in place and the shop line reads that word. An Alundra item writes its own gold value instead. Lurvy's one-time shelves do the same for a remote item.
+  Naomi's Item #4 held another player's item that the seed needed early, and the shelf charged 500 gilder. The other player waited while this player ground the money. That shelf is a legal check. The price was the problem. A remote item has no gold value, so a shelf with no recorded price keeps the disc's word, and the shop line reads that word. An Alundra item still writes its own gold value.
 
-  Write a price for a remote item on a shop check into the placement file, and have the patch write that word. An early required item stays cheap enough that gathering the gilder is not its own step. A later item can still cost more. One flat price for every remote shop item is the other choice. The placement file is what tells the two apart.
+  Naomi's Item #4, Lurvy's Item #5, and the Life Vessel that replaces Lurvy's Item #5 record `price` on a remote placement. The patch writes that word. The price follows the item's classification and the shelf's accessibility sphere, the same numbering as the room's sphere tracker. Sphere 1 is the first set of checks reachable from the start. A progression item costs 100, 200, 300, or 400 gilder in spheres 1 through 4, and 500 from sphere 5 on. A useful item costs 250. A filler item costs 100. A trap costs 50. Lurvy's shelves use the same table. Reaching Lurvy is a later sphere, so a progression item there costs more.
 
 ## Randomizer enhancements
 

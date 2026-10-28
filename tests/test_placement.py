@@ -30,6 +30,9 @@ from alundra.placement import (
     PlacementError,
     allows_outside_item,
     build_placement_document,
+    remote_shop_price,
+    remote_shop_price_applies,
+    remote_shop_price_for,
     write_placement,
 )
 
@@ -150,6 +153,65 @@ class PlacementTests(unittest.TestCase):
                 block_progression=False, progression=False,
                 forbid_precious=source.forbid_precious,
             ))
+
+    def test_remote_shop_prices_follow_classification_and_sphere(self) -> None:
+        self.assertEqual(
+            [remote_shop_price("progression", sphere) for sphere in range(1, 8)],
+            [100, 200, 300, 400, 500, 500, 500],
+        )
+        self.assertEqual(remote_shop_price("useful", 1), 250)
+        self.assertEqual(remote_shop_price("useful", 9), 250)
+        self.assertEqual(remote_shop_price("filler", 3), 100)
+        self.assertEqual(remote_shop_price("trap", 1), 50)
+        self.assertEqual(remote_shop_price("trap", 9), 50)
+        # Progression outranks useful and trap. Trap outranks useful.
+        self.assertEqual(remote_shop_price_for(0b01001, 2), 200)
+        self.assertEqual(remote_shop_price_for(0b00011, 1), 100)
+        self.assertEqual(remote_shop_price_for(0b00110, 4), 50)
+        self.assertEqual(remote_shop_price_for(0b00010, 4), 250)
+        self.assertEqual(remote_shop_price_for(0, 4), 100)
+        with self.assertRaises(PlacementError):
+            remote_shop_price("progression", 0)
+        with self.assertRaises(PlacementError):
+            remote_shop_price("currency", 1)
+
+    def test_remote_shop_price_is_recorded_on_a_one_time_shelf(self) -> None:
+        priced = {
+            source.id for source in GAME_DATA.sources
+            if remote_shop_price_applies(
+                has_price=source.has_price, forbid_precious=source.forbid_precious,
+            )
+        }
+        # Naomi's Item #4, Lurvy's Item #5, and the Life Vessel that replaces it.
+        self.assertEqual(priced, {266, 267, 273})
+
+        placements = _native_placements()
+        placements[273] = OutsidePlacement(player="Player", item="Key Item", flags=0b00001, price=100)
+        placements[266] = OutsidePlacement(player="Bea", item="Ring", flags=0b00010, price=250)
+        placements[267] = OutsidePlacement(player="Sam", item="Map", flags=0, price=100)
+        document = _document(placements)
+        self.assertEqual(
+            document["placements"]["273"],
+            {"player": "Player", "item": "Key Item", "classification": "progression", "price": 100},
+        )
+        self.assertEqual(document["placements"]["266"]["price"], 250)
+        self.assertEqual(document["placements"]["267"]["price"], 100)
+        self.assertNotIn("Key Item", document["randomizerSettings"]["itemsDistribution"])
+
+        placements[1] = OutsidePlacement(player="Player", item="Key Item", flags=0b00001, price=100)
+        with self.assertRaises(PlacementError):
+            _document(placements)
+        placements = _native_placements()
+        placements[262] = OutsidePlacement(player="Bea", item="Ring", flags=0b00010, price=250)
+        with self.assertRaises(PlacementError):
+            _document(placements)
+        placements = _native_placements()
+        placements[273] = OutsidePlacement(player="Player", item="Key Item", flags=0b00001, price=10000)
+        with self.assertRaises(PlacementError):
+            _document(placements)
+        placements[273] = OutsidePlacement(player="Player", item="Key Item", flags=0b00001, price=False)
+        with self.assertRaises(PlacementError):
+            _document(placements)
 
     def test_non_progression_check_refuses_progression(self) -> None:
         self.assertFalse(allows_outside_item(block_progression=True, progression=True))

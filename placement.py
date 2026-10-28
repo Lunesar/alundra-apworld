@@ -1,12 +1,13 @@
 """Placement seed map. --placement-in reads this and patches the disc.
 
 The Alundra format is only in-game item ids. The Multiworld format is the same
-file with at least one remote item. A remote placement has exactly these keys:
+file with at least one remote item. A remote placement has these keys:
 
     {"player": "Player", "item": "Key Item", "classification": "progression"}
 
 player is 1..16 printable ASCII characters and item is 1..28, with no backslash.
-classification is progression, useful, filler, or trap. itemsDistribution counts
+classification is progression, useful, filler, or trap. A one-time shop shelf
+also records price, the gilder that shelf charges. itemsDistribution counts
 only the in-game ids.
 """
 
@@ -38,11 +39,15 @@ FORMAT_MULTIWORLD = 2
 
 @dataclass(frozen=True)
 class OutsidePlacement:
-    """An item from another Archipelago slot, placed on an Alundra check."""
+    """An item from another Archipelago slot, placed on an Alundra check.
+
+    price is the gilder a one-time shop shelf charges. Other checks leave it unset.
+    """
 
     player: str
     item: str
     flags: int
+    price: int | None = None
 
 
 def forbid_progression(
@@ -77,6 +82,44 @@ def allows_outside_item(
     return not (block_progression and progression)
 
 
+# The purse caps at 9999, so a higher price can never be paid.
+_SHOP_PRICE_MAX = 9999
+# Sphere 5 and later keep the price Naomi's Life Vessel shelf has on the disc.
+_PROGRESSION_PRICE_CAP_SPHERE = 5
+
+
+def remote_shop_price_applies(*, has_price: bool, forbid_precious: bool) -> bool:
+    """A one-time shop shelf charges gilder and can hold a remote item.
+
+    A restocking shelf has a price and refuses a remote item. The repaired
+    armor is a one-time check and has no price word.
+    """
+    return has_price and not forbid_precious
+
+
+def remote_shop_price(classification: str, sphere: int) -> int:
+    """Gilder a remote item costs on a one-time shop shelf.
+
+    Sphere 1 is the first set of checks reachable from the start. A
+    progression item costs 100 gilder times that sphere, through sphere 4.
+    Sphere 5 and later stay at 500. Useful items cost 250. Filler items cost
+    100. Trap items cost 50.
+    """
+    if classification == "progression":
+        if isinstance(sphere, bool) or not isinstance(sphere, int) or sphere < 1:
+            raise PlacementError(f"Shop sphere {sphere!r} is not a sphere number.")
+        return min(sphere, _PROGRESSION_PRICE_CAP_SPHERE) * 100
+    if classification == "useful":
+        return 250
+    if classification == "filler":
+        return 100
+    if classification == "trap":
+        return 50
+    raise PlacementError(
+        f"Remote shop classification {classification!r} is not progression, useful, filler, or trap."
+    )
+
+
 def _remote_classification(flags: int) -> str:
     if isinstance(flags, bool) or not isinstance(flags, int) or flags < 0:
         raise PlacementError(f"Remote item classification {flags!r} is not a flag value.")
@@ -88,6 +131,19 @@ def _remote_classification(flags: int) -> str:
     if flags & _USEFUL:
         return "useful"
     return "filler"
+
+
+def remote_shop_price_for(flags: int, sphere: int) -> int:
+    """Price a remote item from its Archipelago classification flags."""
+    return remote_shop_price(_remote_classification(flags), sphere)
+
+
+def _check_shop_price(price: object) -> int:
+    if isinstance(price, bool) or not isinstance(price, int) or not 0 <= price <= _SHOP_PRICE_MAX:
+        raise PlacementError(
+            f"Remote shop price {price!r} must be an integer from 0 to {_SHOP_PRICE_MAX}."
+        )
+    return price
 
 
 def _remote_text(text: object, limit: int, fallback: str) -> str:
@@ -103,11 +159,14 @@ def _remote_text(text: object, limit: int, fallback: str) -> str:
 
 
 def _encode_outside(placed: OutsidePlacement) -> dict:
-    return {
+    encoded: dict[str, str | int] = {
         "player": _remote_text(placed.player, _PLAYER_NAME_MAX, "Player"),
         "item": _remote_text(placed.item, _ITEM_NAME_MAX, "Item"),
         "classification": _remote_classification(placed.flags),
     }
+    if placed.price is not None:
+        encoded["price"] = _check_shop_price(placed.price)
+    return encoded
 
 
 _GAME_SETTING_KEYS = (
@@ -148,6 +207,15 @@ def _encode_placements(
     for location_id in sorted(placements):
         placed = placements[location_id]
         if isinstance(placed, OutsidePlacement):
+            if placed.price is not None:
+                source = game_data.source_by_id[location_id]
+                if not remote_shop_price_applies(
+                    has_price=source.has_price, forbid_precious=source.forbid_precious,
+                ):
+                    raise PlacementError(
+                        f"Location {location_id} ({source.pretty_name}) has a shop price "
+                        "and is not a one-time shop shelf."
+                    )
             encoded[str(location_id)] = _encode_outside(placed)
             continue
         if isinstance(placed, bool) or not isinstance(placed, int) or not 0 <= placed < ITEM_COUNT:

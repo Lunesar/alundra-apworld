@@ -12,6 +12,7 @@ from .data import (
     DEFAULT_DISTRIBUTION,
     DEFAULT_FIXED_LOCATIONS,
     DEFAULT_NON_PROGRESSION_LOCATIONS,
+    HEALING_ITEMS,
     END_NODE,
     LAKE_DESTINATION,
     LAKE_ORIGIN,
@@ -22,6 +23,7 @@ from .data import (
     AlundraDataError,
     GameData,
     ItemRecord,
+    restocking_shop_sources,
 )
 
 
@@ -47,6 +49,13 @@ class LogicSettings:
     starting_mana: int = 0
     starting_gold: int = 0
     allow_spoiler_log: bool = True
+    # vanilla, full_variety, or randomized. Full variety keeps every healing
+    # item purchasable on the shelves that restock and fills the other shelves
+    # from the pool. Randomized fills every one of those shelves.
+    restocking_shop_items: str = "full_variety"
+    # None derives the locks from the mode. Full variety stores its roll here
+    # so the pool and the locked items use the same shelves.
+    restock_locks: tuple[tuple[str, str], ...] | None = None
     starting_inventory: tuple[str, ...] = REQUIRED_STARTING_ITEMS
     fixed_item_sources: tuple[tuple[str, str], ...] = DEFAULT_FIXED_LOCATIONS
     non_progression_locations: tuple[str, ...] = DEFAULT_NON_PROGRESSION_LOCATIONS
@@ -270,10 +279,66 @@ def _check_fixed_item(pretty_name: str, item_name: str, game_data: GameData, cou
         )
 
 
+_RESTOCK_MODES = frozenset({"vanilla", "full_variety", "randomized"})
+
+
+def choose_restock_locks(
+    game_data: GameData, settings: LogicSettings, rng: random.Random,
+) -> dict[str, str]:
+    # Pretty name to item for shelves locked before the fill. Randomized locks
+    # nothing. A shelf named in fixed_item_sources keeps that item instead.
+    # Merrick's trades are not restocking shelves, so none of these modes touch them.
+    mode = settings.restocking_shop_items
+    if mode not in _RESTOCK_MODES:
+        raise LogicError(f"Unknown restocking shop mode '{mode}'.")
+    if mode == "randomized":
+        return {}
+    fixed = {pretty_name for pretty_name, _item_name in settings.fixed_item_sources}
+    shelves = [
+        source for source in restocking_shop_sources(game_data)
+        if source.pretty_name not in fixed
+    ]
+    if mode == "vanilla":
+        placed: dict[str, str] = {}
+        for source in shelves:
+            if source.vanilla_item is None:
+                raise LogicError(f"Restocking shelf '{source.pretty_name}' has no vanilla item.")
+            placed[source.pretty_name] = source.vanilla_item
+        return placed
+    if len(shelves) < len(HEALING_ITEMS):
+        raise LogicError(
+            f"Full variety needs {len(HEALING_ITEMS)} restocking shelves, "
+            f"and {len(shelves)} are open."
+        )
+    chosen = rng.sample(shelves, len(HEALING_ITEMS))
+    items = list(HEALING_ITEMS)
+    rng.shuffle(items)
+    return {source.pretty_name: item for source, item in zip(chosen, items)}
+
+
+def resolved_restock_locks(game_data: GameData, settings: LogicSettings) -> dict[str, str]:
+    # The stored roll wins. Full variety has no roll to derive: the world
+    # chooses the shelves once, then the pool and the locks share that choice.
+    if settings.restock_locks is not None:
+        fixed = {pretty_name for pretty_name, _item_name in settings.fixed_item_sources}
+        locks = dict(settings.restock_locks)
+        overlap = sorted(set(locks) & fixed)
+        if overlap:
+            raise LogicError(
+                f"Restocking shelves are both fixed and locked: {', '.join(overlap)}."
+            )
+        return locks
+    if settings.restocking_shop_items == "full_variety":
+        raise LogicError("Full variety chooses its shelves before the item pool is built.")
+    return choose_restock_locks(game_data, settings, random.Random(0))
+
+
 def build_item_pool(game_data: GameData, settings: LogicSettings) -> list[str]:
     # Item names to submit to the multiworld pool, not counting locked locations.
     # The length is the number of item sources minus locked placements. Extra copies
     # are Herbs. Herbs can sit in a shop; Nothing cannot, because its gold value is 0.
+    # A locked restocking shelf is not an open location and does not take its item
+    # out of the distribution. One Herbs leaves the pool per locked shelf.
     active = resolve_active_crests(settings)
     groups = _slot_groups(game_data, settings.split_boots_effects) if settings.progressive_items else None
     counts = Counter(DEFAULT_DISTRIBUTION)
@@ -291,13 +356,24 @@ def build_item_pool(game_data: GameData, settings: LogicSettings) -> list[str]:
         if pretty_name not in game_data.source_by_pretty_name:
             raise LogicError(f"Non-progression location '{pretty_name}' is not an item source.")
 
+    # Drop filler after fixed items have taken their copies. A short pool, from a
+    # lower crest count, pads Herbs back at the end of this function.
+    closed = resolved_restock_locks(game_data, settings)
+    if closed:
+        if counts["Herbs"] < len(closed):
+            raise LogicError(
+                f"{len(closed)} restocking shelves are locked, so {len(closed)} Herbs "
+                f"have to leave the item pool, and only {counts['Herbs']} Herbs are left."
+            )
+        counts["Herbs"] -= len(closed)
+
     pool: list[str] = []
     for name, count in sorted(counts.items()):
         if count < 0:
             raise LogicError(f"Item pool count for {name} went negative.")
         pool.extend([name] * count)
 
-    empty_locations = len(game_data.sources) - len(fixed)
+    empty_locations = len(game_data.sources) - len(fixed) - len(closed)
     if len(pool) > empty_locations:
         raise LogicError(
             f"Item pool has {len(pool)} items for {empty_locations} open locations."

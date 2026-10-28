@@ -28,7 +28,9 @@ Another slot's item can be placed on an Alundra check. The file is then the Mult
 
 The disc shows "player - item", so those names are kept to 16 and 28 printable ASCII characters. Every other entry is still the in-game item id. `itemsDistribution` counts only those ids. A file of only in-game ids stays the Alundra format (`"format": 1`).
 
-A check that refuses a precious item also refuses a remote item. Those checks are the restocking shop shelves, the item on the table in Tarn's Manor, and the Fairy Pond chests. A remote item on a restocking shelf can be bought again, which spends gilder and adds nothing. The fill still places an item there. Those locations are left out of the world's location list and the room's check list, and the placement file still records the item. A check marked non-progression still refuses a progression item.
+Restocking Shop Items defaults to Full Variety. The eight shelves at Lurvy's and Naomi's are shuffled, and one each of Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, and Wonder Essence is always on them, so every healing item can be bought at either shop. The other three shelves are filled from the item pool. Vanilla instead keeps the retail stock: Lurvy sells all five, and Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Wonder Essence replaces Lurvy's one-time shelf after that shelf has been bought twice. Randomized fills all eight from the item pool. The placement file records the item ids. Those shelves are left out of the world's location list and the room's check list. A remote item cannot sit on one: the shelf would offer it again, which spends gilder and adds nothing. Merrick's trades are checks and are not part of this option.
+
+The item on the table in Tarn's Manor and the Fairy Pond chests also refuse a precious item and a remote item. The fill still places an item there, and the placement file records it. A check marked non-progression still refuses a progression item.
 
 An Alundra item placed in another game is absent from this file. Archipelago records it on that game's check.
 

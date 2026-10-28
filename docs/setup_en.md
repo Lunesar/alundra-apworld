@@ -29,7 +29,9 @@ Alundra: {}
 
 An empty `Alundra` block uses the same defaults as the website's Default preset. The dagger, cloth armor, and short boots are added at generation if the starting inventory does not already list them.
 
-A seed can include other games. Another slot's item may land on an Alundra check. Checks that refuse a precious item also refuse a remote item: the restocking shelves at Lurvy's and Naomi's, and the item on the table in Tarn's Manor. The placement file uses the Multiworld format when it contains a remote item, and the Alundra format when every Alundra check holds an Alundra item.
+`restocking_shop_items` defaults to `full_variety`. The eight shelves that restock are shuffled, and Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, and Wonder Essence can each be bought at Lurvy's or Naomi's. The other three shelves are filled from the item pool. `vanilla` keeps the retail stock: Lurvy sells all five, and Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Wonder Essence replaces Lurvy's one-time shelf after that shelf has been bought twice. `randomized` fills all eight from the item pool. They are still not checks. A full stack of one of those, sent from another game, is sold for gilder, and these shelves are where it can be bought again. Merrick's trades are unchanged.
+
+A seed can include other games. Another slot's item may land on an Alundra check. A check that refuses a precious item also refuses a remote item: a restocking shelf that the fill chooses, the item on the table in Tarn's Manor, and the Fairy Pond chests. The placement file uses the Multiworld format when it contains a remote item, and the Alundra format when every Alundra check holds an Alundra item.
 
 `local_items` in the YAML keeps a named Alundra item in this slot. Listing every Alundra item there fills every check, so another slot's item has nowhere to land and generation fails.
 

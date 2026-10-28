@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from Options import OptionDict, OptionGroup, OptionSet, PerGameCommonOptions, Range, Toggle
+from Options import Choice, OptionDict, OptionGroup, OptionSet, PerGameCommonOptions, Range, Toggle
 from .data import (
     DEFAULT_FIXED_LOCATIONS,
     DEFAULT_NON_PROGRESSION_LOCATIONS,
@@ -137,6 +137,33 @@ class ItemSourcesWithoutProgression(OptionSet):
     default = set(DEFAULT_NON_PROGRESSION_LOCATIONS)
 
 
+class RestockingShopItems(Choice):
+    """What the shelves that restock at Lurvy's and Naomi's sell.
+
+    Full Variety is the default. It shuffles the eight shelves and keeps every
+    healing item purchasable. One each of Herbs, Strength Tonic, Strength
+    Elixyr, Magic Elixyr, and Wonder Essence is always somewhere on them, in
+    any order, at either shop. The other three shelves are filled from the
+    item pool. A full stack of one of these, sent from another game, is sold
+    for gilder. These shelves are where the player buys a replacement.
+
+    Vanilla keeps their retail stock, and that stock can be bought again.
+    Lurvy sells all five of those items. Naomi sells Herbs, Strength Tonic,
+    and Magic Elixyr. Wonder Essence replaces Lurvy's one-time shelf after
+    that shelf has been bought twice.
+
+    Randomized fills all eight shelves from the item pool. They are still not
+    checks, and they still refuse a precious item and an item from another slot.
+    The one-time shelves stay checks in every mode. Merrick's trades are checks
+    and are not part of this option.
+    """
+    display_name = "Restocking Shop Items"
+    option_vanilla = 0
+    option_full_variety = 1
+    option_randomized = 2
+    default = 1
+
+
 @dataclass
 class AlundraOptions(PerGameCommonOptions):
     progressive_items: ProgressiveItems
@@ -153,6 +180,7 @@ class AlundraOptions(PerGameCommonOptions):
     allow_spoiler_log: AllowSpoilerLog
     fixed_item_sources: FixedItemSources
     item_sources_without_progression: ItemSourcesWithoutProgression
+    restocking_shop_items: RestockingShopItems
 
 
 option_groups = [
@@ -163,6 +191,7 @@ option_groups = [
         CrestCount,
         FixedItemSources,
         ItemSourcesWithoutProgression,
+        RestockingShopItems,
     ]),
     OptionGroup("Patch", [
         OriginalGameBalance,

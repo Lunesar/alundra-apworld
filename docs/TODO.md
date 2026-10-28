@@ -67,9 +67,9 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   A remote Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, or Wonder Essence whose stack is already full adds that item's `goldValue` to the purse and counts the receipt. The write is the same s16 as a gilder pickup. The amounts are the shop prices: Herbs 5 (stack of 9), Strength Tonic 20, Strength Elixyr 50, Magic Elixyr 30, Wonder Essence 200. The other four cap at 1. The purse caps at 9999. At the cap, the receipt is counted and the purse stays. The stack stays full, so using one later opens a slot. A chest still gives its item through the chest script. This is the remote queue only.
 
-- [ ] Keep the restocking shelves vanilla, with an option to randomize them.
+- [x] Keep the restocking shelves vanilla, with an option to randomize them.
 
-  These eight shelves restock, have a price, and are filled from the pool today. `pre_fill` places an item on each, then `pre_output` clears the address so the room never lists the check. They refuse a precious item and a remote item.
+  `restocking_shop_items` defaults to full variety. Full variety locks five of the eight shelves, one to each healing item, in a random order at either shop, and the other three are filled from the pool. Vanilla locks all eight to the retail item. Randomized fills all eight from the pool. The placement file records the item id. The pool does not spend a distributed item on a locked shelf; one Herbs leaves the pool per locked shelf so the counts still match. A shelf the fill chooses is placed by `pre_fill`, then `pre_output` clears the address so the room never lists the check. Those shelves refuse a precious item and a remote item. Merrick's trades are not part of this option.
 
   | Id | Shelf | Vanilla item |
   | --- | --- | --- |
@@ -82,13 +82,13 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
   | 271 | Naomi's Shop: Item #2 | Strength Tonic |
   | 272 | Naomi's Shop: Item #3 | Magic Elixyr |
 
-  Add a toggle, default off. Off, the placement file records the vanilla item id and the pool does not spend an item on that shelf. The pool is currently sized to every source, including these eight, so eight items have to leave the pool or generation fails. Drop filler. On, keep the current fill: shuffled, unreported, still no precious item and still no remote item.
-
   The one-time shelves stay checks: Lurvy's Item #5, its first replacement, the repaired Ancient Armor, and Naomi's Item #4.
 
-  Lurvy sells all five healing items. Wonder Essence is the shelf that replaces the unique slot after Leather Armor and the Life Vessel have been bought. Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Strength Elixyr and Wonder Essence are bought back at Lurvy. The patch already obeys the item id in the placement file, so this option lives in the apworld.
+  Lurvy sells all five healing items. Wonder Essence is the shelf that replaces the unique slot after it has been bought twice. Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Strength Elixyr and Wonder Essence are bought at Lurvy. The patch already obeys the item id in the placement file, so this option lives in the apworld.
 
 - [ ] Keep a key item off a restocking shelf.
+
+  This matters when `restocking_shop_items` is randomized, and for the three shelves full variety still fills from the pool. Vanilla locks every shelf to a healing item.
 
   A restocking shelf refuses a precious item and an item whose gold value is 0. The Tree Gem is neither. Its gold value is 150, and the path from `overworld_a3_left_behind_power_glove` to `overworld_a2` requires it, so a seed can place the only copy on Lurvy's repeatable stock. Buying it does not use up a check, and the shelf offers it again. The Small Key, the Sluice Key, the Elevator Key, the Curious Key, Jess's Letter, and Zolist's Stone already have no gold value, so every shop refuses them. The Bouquet and the Secret Pass have a gold value and are not precious, and a path requires each of them, so they can land on the same shelves. The seven crests can too. Their gold values run from 800 to 1500, and they are not marked precious. When a restocking shelf is filled from the pool, it still refuses these items. A one-time shelf may still sell one.
 

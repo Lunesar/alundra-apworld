@@ -48,6 +48,7 @@ from .logic import (
     build_graph,
     choose_active_crests,
     build_item_pool,
+    choose_restock_locks,
     fixed_location_map,
     folded_item_names,
 )
@@ -83,6 +84,7 @@ class AlundraWebWorld(WebWorld):
             "starting_mana": 0,
             "starting_gold": 0,
             "allow_spoiler_log": True,
+            "restocking_shop_items": "full_variety",
             "start_inventory": {
                 "Dagger": 1,
                 "Cloth Armor": 1,
@@ -116,9 +118,13 @@ class AlundraWorld(World):
     def generate_early(self) -> None:
         settings = self._settings_from_options(self._placement_seed())
         active = choose_active_crests(self.random, settings.crest_count)
-        self._settings = replace(settings, active_crests=active)
-        self._graph = build_graph(GAME_DATA, self._settings)
+        settings = replace(settings, active_crests=active)
         try:
+            # One roll. The pool drops one Herbs per locked shelf, and create_items
+            # locks those same shelves.
+            locks = choose_restock_locks(GAME_DATA, settings, self.random)
+            self._settings = replace(settings, restock_locks=tuple(sorted(locks.items())))
+            self._graph = build_graph(GAME_DATA, self._settings)
             self._pool = build_item_pool(GAME_DATA, self._settings)
             self._fixed = fixed_location_map(self._settings)
         except LogicError as error:
@@ -199,6 +205,12 @@ class AlundraWorld(World):
             location = self.multiworld.get_location(pretty_name, self.player)
             location.place_locked_item(self.create_item(item_name))
 
+        # The same shelves the pool closed. A full-variety roll is already stored.
+        locks = self._settings.restock_locks or ()
+        for pretty_name, item_name in locks:
+            location = self.multiworld.get_location(pretty_name, self.player)
+            location.place_locked_item(self.create_item(item_name))
+
         self.multiworld.itempool += [self.create_item(name) for name in self._pool]
 
     def set_rules(self) -> None:
@@ -226,8 +238,12 @@ class AlundraWorld(World):
 
     def pre_fill(self) -> None:
         # Same item rules as every other source. These are filled first so they
-        # can stay out of the world's location list.
-        locations = self._unreported_locations()
+        # can stay out of the world's location list. A shelf locked to its retail
+        # item is already filled, so the fill leaves it alone.
+        locations = [
+            location for location in self._unreported_locations()
+            if location.item is None
+        ]
         if not locations:
             return
         from Fill import fill_restrictive
@@ -392,6 +408,7 @@ class AlundraWorld(World):
                 starting_mana=int(options.starting_mana),
                 starting_gold=int(options.starting_gold),
                 allow_spoiler_log=bool(options.allow_spoiler_log),
+                restocking_shop_items=options.restocking_shop_items.current_key,
                 fixed_item_sources=tuple(fixed),
                 non_progression_locations=tuple(sorted(non_progression)),
             )

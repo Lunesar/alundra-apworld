@@ -52,6 +52,16 @@ CREST_NODES: dict[str, str] = {
 
 REQUIRED_STARTING_ITEMS: tuple[str, ...] = ("Dagger", "Cloth Armor", "Short Boots")
 
+# Stacks the client sells for gilder when a remote copy does not fit. The
+# full variety shop mode places one of each on the shelves that restock.
+HEALING_ITEMS: tuple[str, ...] = (
+    "Herbs",
+    "Strength Tonic",
+    "Strength Elixyr",
+    "Magic Elixyr",
+    "Wonder Essence",
+)
+
 # release_package/presets/default.json. Crests are not in this table; the
 # randomizer adds the rolled crests on top.
 DEFAULT_DISTRIBUTION: dict[str, int] = {
@@ -465,6 +475,16 @@ def item_name_to_id_map(game_data: GameData) -> dict[str, int]:
 def location_sources(game_data: GameData) -> tuple[ItemSourceRecord, ...]:
     # forbidPreciousItems sources are filled, then left out of the location list.
     return tuple(source for source in game_data.sources if not source.forbid_precious)
+
+
+def restocking_shop_sources(game_data: GameData) -> tuple[ItemSourceRecord, ...]:
+    # A shelf that restocks has a price and refuses a precious item. A one-time
+    # shop check has a price and does not set forbidPreciousItems. Tarn's table
+    # and the Fairy Pond chests refuse a precious item and have no price.
+    return tuple(
+        source for source in game_data.sources
+        if source.forbid_precious and source.has_price
+    )
 
 
 def location_name_to_id_map(game_data: GameData) -> dict[str, int]:

@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from enum import Enum
 
-from .data import GAME_DATA, ITEM_COUNT, ITEM_ID_BASE, UPGRADE_TIER, ItemRecord
+from .data import GAME_DATA, HEALING_ITEMS, ITEM_COUNT, ITEM_ID_BASE, UPGRADE_TIER, ItemRecord
 
 # MainRAM offsets. KSEG0 with the top bits dropped. docs/client_memory.md.
 
@@ -68,13 +68,7 @@ _PROGRESSIVE_SCAN = 60
 # every later remote item until the player used one. Herbs holds 9. These
 # four hold 1. The Key holds 99, more than the doors in the game, so a full
 # key stack is counted and the quantity stays. A unique at 1 is counted too.
-_SOLD_WHEN_FULL = frozenset({
-    "Herbs",
-    "Strength Tonic",
-    "Strength Elixyr",
-    "Magic Elixyr",
-    "Wonder Essence",
-})
+_SOLD_WHEN_FULL = frozenset(HEALING_ITEMS)
 _GILDER_VALUE = {0x45: 1, 0x46: 5, 0x47: 10, 0x48: 30}
 # ROM max quantity is 0. item.json leaves it off, so the parsed max is 1.
 # GiveItem does not put these in the inventory array.

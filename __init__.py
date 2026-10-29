@@ -8,8 +8,9 @@ an item sent from another game.
 
 Another slot's item may be placed on an Alundra check. The placement file
 records that item as an object. A one-time shop shelf also records the gilder
-it charges. This slot's own items stay in-game item ids. The Multiworld format
-also records this slot's player name and the apworld version beside the seed.
+it charges. This slot's own items stay in-game item ids. The file is always
+the Multiworld format, recording this slot's player name, the apworld
+version, and the seed.
 """
 
 from __future__ import annotations
@@ -362,7 +363,7 @@ class AlundraWorld(World):
                 )
             placements[source_id] = self._outside_placement(item, source, spheres.get(source_id))
 
-        # Recorded only on the Multiworld format. The Alundra format leaves both out.
+        # Multiworld format
         document = build_placement_document(
             self._settings,
             placements,

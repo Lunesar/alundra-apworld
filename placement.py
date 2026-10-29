@@ -1,22 +1,25 @@
 """Placement seed map. --placement-in reads this and patches the disc.
 
-The Alundra format is only in-game item ids. The Multiworld format is the same
-file with at least one remote item. A remote placement has these keys:
+This world always writes the Multiworld format. That file names this
+slot, the seed, and version information which the randomizer embeds as a
+slot block that the client uses to log in:
+
+    "format": 2, "apworldVersion": "0.1.9", "player": "YourName", "seed": 1
+
+apworldVersion is world_version from archipelago.json. player is this slot's
+login name, kept whole. It is not the shortened player on a remote placement.
+
+A remote placement has these keys:
 
     {"player": "Player", "item": "Key Item", "classification": "progression"}
 
 player is 1..16 printable ASCII characters and item is 1..28, with no backslash.
 classification is progression, useful, filler, or trap. A one-time shop shelf
 also records price, the gilder that shelf charges. itemsDistribution counts
-only the in-game ids.
+only the in-game ids. This slot's own items stay those ids.
 
-The Multiworld format also names the slot that wrote it, beside seed:
-
-    "apworldVersion": "0.1.5", "player": "YourName", "seed": 1
-
-apworldVersion is world_version from archipelago.json. player is this slot's
-login name, kept whole. It is not the shortened player on a remote placement.
-The Alundra format does not carry those two fields.
+The randomizer's own --placement-out writes the Alundra format ("format": 1).
+That file is only in-game item ids and does not carry apworldVersion or player.
 """
 
 from __future__ import annotations
@@ -42,7 +45,8 @@ _ITEM_NAME_MAX = 28
 _PROGRESSION = 0b00001
 _USEFUL = 0b00010
 _TRAP = 0b00100
-# The JSON field is numeric. These names are the Alundra format and the Multiworld format.
+# The JSON field is numeric. This world writes the Multiworld format. The
+# randomizer's own --placement-out writes the Alundra format.
 FORMAT_ALUNDRA = 1
 FORMAT_MULTIWORLD = 2
 # world_version in archipelago.json. Three numeric components, nothing else.
@@ -365,11 +369,11 @@ def build_placement_document(
     *,
     player: str | None = None,
 ) -> dict:
-    """Return the JSON object --placement-in accepts.
+    """Return the Multiworld placement document --placement-in accepts.
 
-    A remote item selects the Multiworld format. That file records apworldVersion
-    and this slot's player beside seed. The Alundra format leaves both out, and
-    a player passed for that format is not written.
+    The file always records apworldVersion and this slot's player beside seed,
+    so a disc patched from it can log in. A file of only in-game item ids is
+    still that format. The randomizer writes the Alundra format itself.
     """
     _check_seed(settings.seed)
     _check_location_ids(placements, game_data)
@@ -377,21 +381,14 @@ def build_placement_document(
     _check_distribution_counts(counted)
     inventory = _starting_inventory(starting_inventory, game_data)
     _check_required_starting_items(inventory)
-    # A remote item selects the Multiworld format. Otherwise the file stays the Alundra format.
-    remote = any(isinstance(placed, OutsidePlacement) for placed in placements.values())
-    body = {
-        "seed": settings.seed,
-        "gameSettings": _game_settings(settings),
-        "randomizerSettings": _randomizer_settings(settings, inventory, counted),
-        "placements": encoded,
-    }
-    if not remote:
-        return {"format": FORMAT_ALUNDRA, **body}
     return {
         "format": FORMAT_MULTIWORLD,
         "apworldVersion": apworld_version(),
         "player": _check_slot_player(player),
-        **body,
+        "seed": settings.seed,
+        "gameSettings": _game_settings(settings),
+        "randomizerSettings": _randomizer_settings(settings, inventory, counted),
+        "placements": encoded,
     }
 
 

@@ -56,12 +56,24 @@ def _document(placements: dict, *, player: str | None = "YourName") -> dict:
 
 
 class PlacementTests(unittest.TestCase):
-    def test_native_file_stays_item_ids(self) -> None:
+    def test_native_file_is_multiworld_and_names_the_slot(self) -> None:
         document = _document(_native_placements())
-        self.assertEqual(document["format"], FORMAT_ALUNDRA)
-        self.assertNotIn("apworldVersion", document)
-        self.assertNotIn("player", document)
-        self.assertIn("seed", document)
+        self.assertEqual(
+            list(document),
+            [
+                "format",
+                "apworldVersion",
+                "player",
+                "seed",
+                "gameSettings",
+                "randomizerSettings",
+                "placements",
+            ],
+        )
+        self.assertEqual(document["format"], FORMAT_MULTIWORLD)
+        self.assertNotEqual(document["format"], FORMAT_ALUNDRA)
+        self.assertEqual(document["apworldVersion"], apworld_version())
+        self.assertEqual(document["player"], "YourName")
         self.assertTrue(all(isinstance(value, int) for value in document["placements"].values()))
         self.assertEqual(
             sum(document["randomizerSettings"]["itemsDistribution"].values()),
@@ -104,8 +116,9 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(len(document["placements"][str(source.id)]["player"]), 16)
 
     def test_multiworld_file_requires_a_slot_name(self) -> None:
+        # A file of only in-game ids still names the slot. Omitting it would
+        # patch a disc the client cannot log in with.
         placements = _native_placements()
-        placements[GAME_DATA.sources[0].id] = OutsidePlacement(player="Bea", item="Orb", flags=0)
         with self.assertRaises(PlacementError):
             build_placement_document(
                 LogicSettings(),

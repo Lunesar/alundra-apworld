@@ -20,17 +20,17 @@ alundra-randomizer --placement-in=placement.json
 
 You need your own USA 1.1 disc image. The world does not contain one.
 
-Another slot's item can be placed on an Alundra check. The file is then the Multiworld format (`"format": 2`). That entry in `placements` names the player, the item, and one classification (`progression`, `useful`, `filler`, or `trap`):
+The file is the Multiworld format (`"format": 2`). It holds `player`, `seed`, and `apworldVersion` data. `player` is this slot's name, the string the room expects at login. The manifest in `archipelago.json` records this same slot as an integer.
+
+Another slot's item on an Alundra check is an object in `placements`. That object names the player, the item, and one classification (`progression`, `useful`, `filler`, or `trap`):
 
 ```json
 {"player": "Player", "item": "Key Item", "classification": "progression"}
 ```
 
-The disc shows "player - item", so those names are kept to 16 and 28 printable ASCII characters. Every other entry is still the in-game item id. `itemsDistribution` counts only those ids. A file of only in-game ids stays the Alundra format (`"format": 1`).
+The disc shows "player - item", so those names are kept to 16 and 28 printable ASCII characters. Every other entry is still the in-game item id. `itemsDistribution` counts only those ids.
 
-The Multiworld format also names this slot, beside `seed`. `apworldVersion` is the `world_version` of the world that wrote the file, `major.minor.patch`. `player` is this slot's name, the string the room expects at login. It is not shortened, and it is not the `player` inside a placement. That one is the other slot, kept to 16 printable ASCII characters for the disc line. The manifest in `archipelago.json` records this same slot as an integer. The Alundra format does not include `apworldVersion` or `player`.
-
-When the randomizer patches from a Multiworld file, it writes that version, that player, and that seed into the executable. The BizHawk client reads them. It logs in as that player, and it disconnects if the room's seed is different. A file of only Alundra items has no slot block on the disc.
+When the randomizer patches from a Multiworld file, it writes the apworld version, the player, and the seed into the executable. The BizHawk client reads them. It logs in as that player, and it disconnects if the room's seed is different. The checks and the goal are reported to the room.
 
 A remote item on Naomi's Item #4, Lurvy's Item #5, or the Life Vessel that replaces Lurvy's Item #5 also records `price`, the gilder that shelf charges. A progression item costs 100 in sphere 1, 200 in sphere 2, 300 in sphere 3, 400 in sphere 4, and 500 from sphere 5 on. Sphere 1 is the first set of checks reachable at the start, the same numbering as the room's sphere tracker. A useful item costs 250. A filler item costs 100. A trap costs 50. An Alundra item on those shelves keeps that item's gold value.
 

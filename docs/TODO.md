@@ -1,6 +1,6 @@
 # Before full release
 
-The playable beta generates a placement file, patches a USA 1.1 disc from the command line, and connects a BizHawk client. `archipelago.json` is world version 0.1.5. This is the work to finish before that version leaves beta.
+The playable beta generates a placement file, patches a USA 1.1 disc from the Launcher, and connects a BizHawk client. `archipelago.json` is world version 0.1.5. This is the work to finish before that version leaves beta.
 
 ## Quality of life
 
@@ -16,9 +16,9 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   The website calls the same `generate_output`. archipelago.gg rolls only worlds installed on that site, and Alundra is not among them until it is core. Uploading a Launcher zip already puts the container on a room. This item is a generate started on the site.
 
-- [ ] Add a patch window so the player does not run the randomizer from a command line.
+- [x] Add a patch window so the player does not run the randomizer from a command line.
 
-  The window takes the downloaded `.apalundra` file and a USA 1.1 disc, runs the patcher shipped in this world, and shows where the BIN/CUE was written. The placement file already carries the settings, so the window does not ask for a preset. The randomizer still reads `placement.json` through `--placement-in`, so the window opens the container and passes that member. The Archipelago Launcher hosts the window as a component, the same way other worlds add launcher entries.
+  The Archipelago Launcher hosts an Alundra Patch tool. The button takes the downloaded `.apalundra` file and a USA 1.1 disc, runs the patcher shipped in this world, and shows where the BIN/CUE was written. The placement file already carries the settings, so the button does not ask for a preset. The randomizer still reads `placement.json` through `--placement-in`. Python extracts that member from the zip and passes the path. Open Patch routes an `.apalundra` file to this button. The BizHawk client is unchanged.
 
 - [ ] Ship the world as `alundra.apworld`.
 
@@ -40,9 +40,13 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the co
 
   Uploading the Launcher zip to archipelago.gg created seed `3JFtaQxUR3OwviseWUDeIQ`. The room page shows Download Patch File... for the Alundra slot. The randomizer still reads `placement.json` through `--placement-in`. Opening the container is the patch window's job.
 
-- [ ] Ship the Linux and Windows patchers inside the apworld, and pick one at runtime.
+- [x] Ship the Linux patcher inside the apworld, and pick the platform directory at runtime.
 
-  A player who has this apworld still has to fetch the randomizer before a disc can be patched. Build `alundra-randomizer` for Linux and for Windows and store both binaries in the world. Store `dumpsxiso` and `mkpsxiso` for both platforms next to them. The randomizer runs those tools from `./tools/` on Linux and from `tools\\dumpsxiso.exe` and `tools\\mkpsxiso.exe` on Windows, and the working directory has to be the folder that contains `tools/`. The apworld is a zip, so the chosen files are extracted to a temporary directory and run from there. `sys.platform` selects the pair: `linux` or `win32`. The window from the patch item passes the downloaded `.apalundra` file and the player's USA 1.1 disc. The BizHawk client is already the Python in this world. Archipelago and BizHawk stay separate installs. The disc stays the player's own copy.
+  `patcher/linux/alundra-randomizer`, `patcher/linux/tools/dumpsxiso`, and `patcher/linux/tools/mkpsxiso` are in the world. `importlib.resources` reads them from a loose checkout and from the apworld zip. The button extracts that trio to a temporary directory and runs with that directory as the working directory, so the randomizer finds `./tools/dumpsxiso` and `./tools/mkpsxiso`. `sys.platform` selects the directory: `linux` uses `patcher/linux`. The player's disc is passed as `--input`, and `--outputrom` is a directory next to that disc. The BizHawk client is already the Python in this world. Archipelago and BizHawk stay separate installs. The disc stays the player's own copy.
+
+- [ ] Ship the Windows patcher.
+
+  There is no Windows build in this package. `patcher/win32/` is absent. On `win32` the button reports that the Windows patcher is not in this package. Any other platform gets the same kind of message. When the files exist they are `alundra-randomizer.exe`, `tools/dumpsxiso.exe`, and `tools/mkpsxiso.exe`, and the working directory still has to be the folder that contains `tools\\`.
 
 - [ ] Report a location hint when the player reads one in the game, or looks at a shop shelf that is a check.
 

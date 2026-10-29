@@ -7,3 +7,6 @@ venv/
 .vscode/
 *.apworld
 *.swp
+
+# Platform binaries. They ship in the apworld zip, so this stays out of .apignore.
+patcher/

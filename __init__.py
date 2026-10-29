@@ -1,8 +1,8 @@
 """Archipelago world for Alundra.
 
 Generation writes a placement seed map as placement.json inside an .apalundra
-player container. The Alundra randomizer reads that JSON with --placement-in
-and patches a USA 1.1 disc. This world does not patch the disc. The BizHawk
+player container. The Launcher's Alundra Patch button extracts that member and
+runs the randomizer shipped in this world against a USA 1.1 disc. The BizHawk
 client logs in to a room, reports chests whose event code is known, and grants
 an item sent from another game.
 
@@ -26,8 +26,9 @@ from BaseClasses import CollectionState, Item, ItemClassification, Region, Tutor
 from Options import OptionError
 from worlds.AutoWorld import WebWorld, World
 from worlds.Files import APPlayerContainer
+from worlds.LauncherComponents import Component, SuffixIdentifier, Type, components
 
-# Register AlundraClient with BizHawkClient
+# Register AlundraClient with BizHawkClient.
 from . import client
 from .data import (
     GAME_DATA,
@@ -59,6 +60,7 @@ from .logic import (
     folded_item_names,
 )
 from .options import AlundraOptions, option_groups
+from .patcher import launch_patch
 from .placement import (
     OutsidePlacement,
     forbid_progression,
@@ -70,6 +72,14 @@ from .placement import (
 )
 
 logger = logging.getLogger("Archipelago")
+
+components.append(Component(
+    "Alundra Patch",
+    func=launch_patch,
+    component_type=Type.TOOL,
+    file_identifier=SuffixIdentifier(".apalundra"),
+    description="Patch a USA 1.1 disc from a downloaded .apalundra file.",
+))
 
 
 class AlundraContainer(APPlayerContainer):

@@ -3,19 +3,23 @@
 ## What you need
 
 - Archipelago 0.6.7 or newer
-- This world linked into that install
-- The Alundra randomizer, built or taken from a release of https://github.com/Lunesar/alundra-randomizer
-- A USA 1.1 disc image of Alundra (`input.bin`, `Alundra.bin`, `Alundra (USA).bin`, `Alundra (USA) (Rev 1).bin`, or `Alundra (USA) (v1.1).bin`, or pass another name with `--input=`)
+- `alundra.apworld`
+- A USA 1.1 disc image of Alundra, as a `.bin` file
 
-## Install the world
+The patcher ships inside the apworld. There is no separate randomizer install, and the patch button does not ask for a preset. The placement file already carries the settings.
 
-From the Archipelago directory:
+## Patch a disc
 
-```
-ln -s /path/to/alundra-apworld worlds/alundra
-```
+1. Install `alundra.apworld`. In the Archipelago Launcher, choose Install APWorld and select that file.
+2. Download the `.apalundra` file from the room page. The page offers it as Download Patch File.
+3. Open the Alundra Patch button.
+4. Choose the disc.
 
-On Windows, a directory junction to that same `alundra` folder works in place of the link.
+The button asks for the `.apalundra` file when Open Patch did not hand it one, then asks for the disc. It patches that disc and shows where the BIN/CUE was written. Those files are in a directory next to the disc. The disc you chose is left unchanged.
+
+The downloaded file is a zip. `placement.json` inside it is the placement document. The button extracts that member and passes the path to the patcher.
+
+This package contains the Linux patcher. On Windows the button reports that the Windows patcher is not in this package.
 
 ## Generate
 
@@ -37,15 +41,7 @@ A remote item on Naomi's Item #4, Lurvy's Item #5, or the Life Vessel that repla
 
 `local_items` in the YAML keeps a named Alundra item in this slot. Listing every Alundra item there fills every check, so another slot's item has nowhere to land and generation fails.
 
-## Patch
-
-The generation zip holds one file per Alundra slot. Its name looks like `AP_{seed}_P{n}_{Name}.apalundra`. The room page offers that file as Download Patch File. The file is a zip. `placement.json` inside it is the placement document. The randomizer reads that document from a path. Unzip the `.apalundra` file, then from the randomizer directory, with the disc image in place:
-
-```
-alundra-randomizer --placement-in=/path/to/placement.json --nopause
-```
-
-The randomizer writes the patched BIN/CUE and, unless you turned the spoiler off, the hint log. The placement file already contains the settings, so do not also pass `--preset`.
+The generation zip holds one file per Alundra slot. Its name looks like `AP_{seed}_P{n}_{Name}.apalundra`. The room page offers that file as Download Patch File. Open the Alundra Patch button and choose the USA 1.1 disc. The button writes the patched BIN/CUE and, unless the spoiler was turned off, the hint log, in a directory next to that disc.
 
 ## Connect
 

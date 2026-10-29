@@ -200,6 +200,31 @@ def _check_seed(seed: int) -> None:
         raise PlacementError("Placement seed must fit in an unsigned 32-bit value.")
 
 
+def pinned_randomizer_version() -> str:
+    """Return the alundra-randomizer release this world was built against.
+
+    randomizer.lock.json names that release. The slot block in a patched disc
+    carries the same string, and the client requires them to match.
+    """
+    resource = files(__package__).joinpath("randomizer.lock.json")
+    try:
+        text = resource.read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise PlacementError(
+            "randomizer.lock.json is missing, so this world has no randomizer release."
+        ) from error
+    try:
+        pin = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise PlacementError(f"randomizer.lock.json is malformed: {error}") from error
+    version = pin.get("version") if isinstance(pin, dict) else None
+    if not isinstance(version, str) or _APWORLD_VERSION.fullmatch(version) is None:
+        raise PlacementError(
+            f"version {version!r} in randomizer.lock.json must be major.minor.patch."
+        )
+    return version
+
+
 def apworld_version() -> str:
     """Return world_version from archipelago.json, the version that writes the file."""
     resource = files(__package__).joinpath("archipelago.json")

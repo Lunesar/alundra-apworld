@@ -6,7 +6,7 @@ Addresses are KSEG0 (the `0x80xxxxxx` the executable uses). In BizHawk's MainRAM
 
 The patcher prepends code and lowers the EXE load address by the same amount, so the function entry points in this document stay at these addresses on a patched image. One built EXE (load address shifted down by `0x1000`) still had `TryIncrease` at `0x8004FBE4`. A client can sanity-check that entry: the first instruction is `addiu sp, sp, -32` (`27 BD FF E0`).
 
-A Multiworld patch also writes a slot block as the first injected blob. It stays at KSEG0 `0x8001F780` (MainRAM `0x1F780`) because later injections are inserted below it. The block is 0x80 bytes. `ALAP` at byte 0, block version u16 `1` at `0x04`, seed u32 at `0x08`, the randomizer version at `0x0C` (16 bytes, NUL-terminated), the apworld version at `0x1C` (16 bytes), and the login name at `0x2C` (64 bytes). The client requires this block. A vanilla disc has the `TryIncrease` prologue and does not have the block.
+A Multiworld patch also writes a slot block as the first injected blob. It stays at KSEG0 `0x8001F780` (MainRAM `0x1F780`) because later injections are inserted below it. The block is 0x80 bytes. `ALAP` at byte 0, block version u16 `1` at `0x04`, seed u32 at `0x08`, the randomizer version at `0x0C` (16 bytes, NUL-terminated), the apworld version at `0x1C` (16 bytes), and the login name at `0x2C` (64 bytes). The client requires this block, and it requires the randomizer version in the block to be the release named in `randomizer.lock.json`. A vanilla disc has the `TryIncrease` prologue and does not have the block. A block from another randomizer release is left alone.
 
 ## Work RAM
 

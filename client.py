@@ -28,7 +28,7 @@ from .checks import (
     game_beaten,
     names_for,
 )
-from .placement import apworld_version
+from .placement import apworld_version, pinned_randomizer_version
 from .receive import READS, Hold, checks_ready, hold_message, parse_play_state, pending_ap_id, plan
 from .slot import SLOT_MAIN_RAM, SLOT_SIZE, parse_slot_block, room_seed_matches
 
@@ -77,15 +77,17 @@ class AlundraClient(BizHawkClient):
         self._slot = None
         self._noted_missing_block = False
         self._unknown_version: str | None = None
+        self._unknown_randomizer: str | None = None
         self._client_version: str | None = None
+        self._randomizer_version: str | None = None
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         """Claim the image when it is this client's patched executable.
 
         The TryIncrease prologue distinguishes Alundra from another PlayStation
         image. The slot block distinguishes a Multiworld patch from a vanilla
-        disc. A block written by an apworld version this client is not is left
-        alone.
+        disc. A block written by an apworld version this client is not, or by
+        a randomizer release other than the one this world pins, is left alone.
         """
         try:
             # One read: the prologue and the block are both in the loaded executable.
@@ -119,10 +121,23 @@ class AlundraClient(BizHawkClient):
                     self._client_version,
                 )
             return False
+        if self._randomizer_version is None:
+            self._randomizer_version = pinned_randomizer_version()
+        if block.randomizer_version != self._randomizer_version:
+            self._slot = None
+            if block.randomizer_version != self._unknown_randomizer:
+                self._unknown_randomizer = block.randomizer_version
+                logger.info(
+                    "This ROM was patched by alundra-randomizer %s, and this world expects %s.",
+                    block.randomizer_version,
+                    self._randomizer_version,
+                )
+            return False
 
         self._slot = block
         self._noted_missing_block = False
         self._unknown_version = None
+        self._unknown_randomizer = None
         ctx.game = self.game
         ctx.items_handling = _ITEMS_FROM_OTHER_WORLDS
         return True

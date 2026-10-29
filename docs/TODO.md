@@ -1,12 +1,12 @@
 # Before full release
 
-The playable beta generates a placement file, patches a USA 1.1 disc from the Launcher, and connects a BizHawk client. `archipelago.json` is world version 0.1.5. This is the work to finish before that version leaves beta.
+The playable beta generates a placement file, patches a USA 1.1 disc from the Launcher, and connects a BizHawk client. `archipelago.json` is world version 0.1.9. `randomizer.lock.json` pins alundra-randomizer 1.3.0. This is the work to finish before that version leaves beta.
 
 ## Quality of life
 
 - [x] Embed a slot block in the patched executable, and have the BizHawk client read it.
 
-  The randomizer writes the block when it patches a Multiworld placement file. The block is the first injected blob, so it stays at KSEG0 `0x8001F780` (MainRAM `0x1F780`). It holds the randomizer version, the apworld version, the placement seed, and the player name. `validate_rom` reads it in the same request as the `TryIncrease` prologue. A vanilla disc, an Alundra-format patch, and a block from an unknown apworld version are left alone. `set_auth` copies the player name into `ctx.auth`. After the room accepts the slot, the client compares the ROM seed with `slot_data["seed"]` and disconnects on a mismatch. The room host and port stay typed in the client.
+  The randomizer writes the block when it patches a Multiworld placement file. The block is the first injected blob, so it stays at KSEG0 `0x8001F780` (MainRAM `0x1F780`). It holds the randomizer version, the apworld version, the placement seed, and the player name. `validate_rom` reads it in the same request as the `TryIncrease` prologue. A vanilla disc, an Alundra-format patch, a block from an unknown apworld version, and a block whose randomizer version is not the release in `randomizer.lock.json` are left alone. `set_auth` copies the player name into `ctx.auth`. After the room accepts the slot, the client compares the ROM seed with `slot_data["seed"]` and disconnects on a mismatch. The room host and port stay typed in the client.
 
 - [x] Confirm the Launcher generate writes the placement file.
 
@@ -46,7 +46,7 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the La
 
 - [x] Ship the Windows patcher.
 
-  `patcher/win32/alundra-randomizer.exe`, `patcher/win32/tools/dumpsxiso.exe`, and `patcher/win32/tools/mkpsxiso.exe` are in the world, along with the mkpsxiso `LICENSE.md` and `README.md`. Python reports Windows as `win32`, so that is the directory name even though the executable is the 64-bit build. On `win32` the button extracts that trio and runs with the temporary directory as the working directory, so the randomizer finds `tools\dumpsxiso.exe` and `tools\mkpsxiso.exe`. `Archipelago/build/apworlds/alundra.apworld`, built 2026-10-28, contains this set and the Linux set.
+  `patcher/win32/alundra-randomizer.exe`, `patcher/win32/tools/dumpsxiso.exe`, and `patcher/win32/tools/mkpsxiso.exe` are in the world, along with the mkpsxiso `LICENSE.md` and `README.md`. Python reports Windows as `win32`, so that is the directory name even though the executable is the 64-bit build. On `win32` the button extracts that trio and runs with the temporary directory as the working directory, so the randomizer finds `tools\dumpsxiso.exe` and `tools\mkpsxiso.exe`. `patcher/linux` and `patcher/win32` are copied from the Compile workflow artifacts `alundra-randomizer-linux` and `alundra-randomizer-win64`. Both are alundra-randomizer 1.3.0.
 
 - [ ] Report a location hint when the player reads one in the game, or looks at a shop shelf that is a check.
 

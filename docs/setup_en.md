@@ -19,7 +19,7 @@ The button asks for the `.apalundra` file when Open Patch did not hand it one, t
 
 The downloaded file is a zip. `placement.json` inside it is the placement document. The button extracts that member and passes the path to the patcher.
 
-This package contains the Linux patcher. On Windows the button reports that the Windows patcher is not in this package.
+The package contains the Linux patcher and the Windows patcher. The button runs the one for this machine. Both are alundra-randomizer 1.3.0. The client leaves a disc patched by another release alone.
 
 ## Generate
 
@@ -50,6 +50,6 @@ The Lua script ships with Archipelago at `data/lua/connector_bizhawk_generic.lua
 1. Open the patched USA 1.1 disc in BizHawk with the NymaShock core. In Config > Customize, enable "Run in background" so the client stays connected when the window is not focused. BizHawk 2.7 and 2.8 need the Lua core set to Lua+LuaInterface under Config > Customize > Advanced, then a restart. 2.9 and newer already use a core the connector can load.
 2. In EmuHawk, open Tools > Lua Console and leave that window open. Choose Script > Open Script and open `data/lua/connector_bizhawk_generic.lua` from the Archipelago install.
 3. Open BizHawk Client. The first time, it asks for `EmuHawk.exe`.
-4. When the log says `Running handler for Alundra`, enter the room address, for example `archipelago.gg:38281`, and connect. The client reads the slot name from the disc. A vanilla disc, or a patch from an Alundra-format placement file, has no slot block, so the handler does not start. A block written by a different apworld version is left alone. If the disc's seed is not the room's seed, the client disconnects.
+4. When the log says `Running handler for Alundra`, enter the room address, for example `archipelago.gg:38281`, and connect. The client reads the slot name from the disc. A vanilla disc, or a patch from an Alundra-format placement file, has no slot block, so the handler does not start. A block written by a different apworld version, or by a randomizer release other than the one pinned in this world, is left alone. If the disc's seed is not the room's seed, the client disconnects.
 
 The client logs `Logged in as <slot name>.` when the room accepts the slot. Taking a watched check logs `Checked <location name>.` and sends that location to the room. That is an opened chest, a one-time shop purchase, or a Merrick trade whose flag is now set. The client sends those flags once Alundra has control, the same wait as a remote item. A watch while the executable has loaded and that state is not ready yet sends nothing. A check that was already taken is sent on the first ready watch after login. An item found for this slot in another game is granted once Alundra has control. The client log says `Received Sword.` for that sword, and `Received Fiend Blade.` when a sword upgrade became that blade. A full stack of Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, or Wonder Essence is paid out as that item's shop price in gilder (`Received 5 Gilder for Herbs.`), and the next item is granted. The prices are 5, 20, 50, 30, and 200. At 9999 gilder the receipt is still counted. When the ending starts, the client logs `Goal completed.` and tells the room the goal is met.

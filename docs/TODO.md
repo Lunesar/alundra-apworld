@@ -32,7 +32,7 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the La
 
   Leave `version` and `compatible_version` out of the source `archipelago.json`. The builder adds them. The current container version is 7. `game`, `authors`, `world_version`, and `minimum_ap_version` are copied from the file that is already in the world.
 
-  `data.py` reads `data/*.json` with `importlib.resources`, so the same load works from the source tree and from the zip. `.apignore` leaves out `tests/`, `docs/TODO.md`, `README.md`, `data/README.md`, and `docs/client_memory.md`. The setup guide and the game page stay. `__pycache__` is already excluded by Archipelago. `data/` is a data folder next to `data.py`. It does not need an `__init__.py`.
+  `data.py` reads `data/*.json` with `importlib.resources`, so the same load works from the source tree and from the zip. `.apignore` leaves out `tests/`, `docs/TODO.md`, the root `README.md`, `data/README.md`, and `docs/client_memory.md`. The mkpsxiso `README.md` files under `patcher/` stay. The setup guide and the game page stay. `__pycache__` is already excluded by Archipelago. `data/` is a data folder next to `data.py`. It does not need an `__init__.py`.
 
 - [x] Write the placement file as a player container with its own extension, so the room page offers it for download.
 
@@ -44,9 +44,9 @@ The playable beta generates a placement file, patches a USA 1.1 disc from the La
 
   `patcher/linux/alundra-randomizer`, `patcher/linux/tools/dumpsxiso`, and `patcher/linux/tools/mkpsxiso` are in the world. `importlib.resources` reads them from a loose checkout and from the apworld zip. The button extracts that trio to a temporary directory and runs with that directory as the working directory, so the randomizer finds `./tools/dumpsxiso` and `./tools/mkpsxiso`. `sys.platform` selects the directory: `linux` uses `patcher/linux`. The player's disc is passed as `--input`, and `--outputrom` is a directory next to that disc. The BizHawk client is already the Python in this world. Archipelago and BizHawk stay separate installs. The disc stays the player's own copy.
 
-- [ ] Ship the Windows patcher.
+- [x] Ship the Windows patcher.
 
-  There is no Windows build in this package. `patcher/win32/` is absent. On `win32` the button reports that the Windows patcher is not in this package. Any other platform gets the same kind of message. When the files exist they are `alundra-randomizer.exe`, `tools/dumpsxiso.exe`, and `tools/mkpsxiso.exe`, and the working directory still has to be the folder that contains `tools\\`.
+  `patcher/win32/alundra-randomizer.exe`, `patcher/win32/tools/dumpsxiso.exe`, and `patcher/win32/tools/mkpsxiso.exe` are in the world, along with the mkpsxiso `LICENSE.md` and `README.md`. Python reports Windows as `win32`, so that is the directory name even though the executable is the 64-bit build. On `win32` the button extracts that trio and runs with the temporary directory as the working directory, so the randomizer finds `tools\dumpsxiso.exe` and `tools\mkpsxiso.exe`. `Archipelago/build/apworlds/alundra.apworld`, built 2026-10-28, contains this set and the Linux set.
 
 - [ ] Report a location hint when the player reads one in the game, or looks at a shop shelf that is a check.
 

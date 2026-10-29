@@ -7,7 +7,7 @@ tests/
 docs/client_memory.md
 docs/TODO.md
 data/README.md
-README.md
+/README.md
 
 # Editor scratch files.
 *.swp

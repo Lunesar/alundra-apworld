@@ -1,6 +1,8 @@
 # Client memory contract
 
-What a future BizHawk or C++ client has to peek and poke on the USA 1.1 image. This is not a client. Addresses below are ones the randomizer already writes, or ones those routines load and store. Anything not in that set is **TBD**. Do not fill a TBD by assuming the next field continues the pattern.
+Address map for the USA 1.1 image. The BizHawk client in this world follows it, and a later client has to follow it too. Players want [setup_en.md](setup_en.md). This file is left out of the apworld.
+
+Addresses below are ones the randomizer already writes, or ones those routines load and store. Anything not in that set is **TBD**. Do not fill a TBD by assuming the next field continues the pattern.
 
 Addresses are KSEG0 (the `0x80xxxxxx` the executable uses). In BizHawk's MainRAM domain, drop the top bits: offset = address & `0x001FFFFF` (so `0x801DD334` is MainRAM `0x1DD334`). Multi-byte values are little-endian.
 

@@ -4,7 +4,7 @@ This world always writes the Multiworld format. That file names this
 slot, the seed, and version information which the randomizer embeds as a
 slot block that the client uses to log in:
 
-    "format": 2, "apworldVersion": "0.1.9", "player": "YourName", "seed": 1
+    "format": 2, "apworldVersion": "0.2.0", "player": "YourName", "seed": 1
 
 apworldVersion is world_version from archipelago.json. player is this slot's
 login name, kept whole. It is not the shortened player on a remote placement.

@@ -48,9 +48,9 @@ class PatchError(Exception):
 def launch_patch(*args: str) -> None:
     """Patch a USA 1.1 disc.
 
-    The first argument is an .apalundra file from Open Patch. With no path,
-    ask for that file, then ask for the disc. The placement file already
-    carries the settings, so this does not ask for a preset.
+    With no path, ask for the .apalundra file, then ask for the disc. Open
+    Patch does not offer this suffix. The placement file already carries the
+    settings, so this does not ask for a preset.
     """
     from worlds.LauncherComponents import launch
 

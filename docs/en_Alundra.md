@@ -1,45 +1,45 @@
 # Alundra
 
-Find the crests, open Lake Shrine, and defeat Melzas. Generation writes a placement file for the Alundra randomizer. A BizHawk client can log in to the room, report a check whose event code is known, and grant an item sent from another game.
+Item placement comes from the Alundra randomizer. Another slot's item can sit on one of your checks, and an item of yours can be placed in another game. The client grants that item once you have control.
 
-The randomizer patches a USA 1.1 disc from that file. Hints inside the game are written then, by the randomizer. Archipelago hint points are not shown in the game.
+Patching and connecting are in the [setup guide](setup_en.md). You supply your own USA 1.1 disc.
 
 ## Goal
 
-The victory event is Defeat Melzas, reached from the Lake Shrine. The BizHawk client sends the goal when the game loads the ending, after Melzas. With the default settings the seven crests are in the item pool and the Lake Shrine seals start open, so the crests lead to the fight. Checks behind the bow, the flail, and the Spring Bean on the shrine itself are still in the world.
+Defeat Melzas. The client sends the goal when the ending loads, after the fight.
 
-Crests past the crest count are already on their pedestals when the file is new. The placement file names those crests. The randomizer reads that list when it patches the disc. The seed in the file is for the hash sentence and the in-game hints.
+With the default settings, weapons, armor, and spells are progressive, boots stay separate items, all seven crests are in the pool, and the Lake Shrine seals start open. The crests lead to the fight. Checks on the shrine that need the bow, the flail, or the Spring Bean are still in the world. A new game starts with the dagger, cloth armor, and short boots.
 
-## What generation produces
+Crests past the crest count are already on their pedestals.
 
-A player file inside the generation zip, named from the slot plus `.apalundra`. The room page offers that file as Download Patch File. The file is a zip. `archipelago.json` inside it records this game and the integer slot number. `placement.json` beside it is the placement document the randomizer reads:
+## Checks
 
-```
-alundra-randomizer --placement-in=placement.json
-```
+Chests, one-time shop purchases, and Merrick's trades are checks. The client reports a check once you have control.
 
-You need your own USA 1.1 disc image. The world does not contain one.
+Archipelago leaves the following out of the check list. Each one still receives an item. That item is never progression, and never from another slot.
 
-The file is the Multiworld format (`"format": 2`). It holds `player`, `seed`, and `apworldVersion` data. `player` is this slot's name, the string the room expects at login. The manifest in `archipelago.json` records this same slot as an integer.
+- The eight shelves that restock at Lurvy's and Naomi's. Restocking Shop Items chooses what they sell. A useful item such as a ring can still land on a shelf the fill chooses. A full stack of Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, or Wonder Essence, sent from another game, is paid out as that item's shop price in gilder: 5, 20, 50, 30, or 200. These shelves are where you can buy the item again. At 9999 gilder the payout is still counted and the purse stays full.
+- The item on the table in Tarn's Manor.
+- The Fairy Pond chests. The pond seals after its reward, so a chest left there would be missed.
 
-Another slot's item on an Alundra check is an object in `placements`. That object names the player, the item, and one classification (`progression`, `useful`, `filler`, or `trap`):
+Hints in the game are written when the disc is patched. Archipelago hint points are not used in the game.
 
-```json
-{"player": "Player", "item": "Key Item", "classification": "progression"}
-```
+Another player's item is shown as "player - item". The player name is kept to 16 printable ASCII characters and the item name to 28, so the line fits on the disc. The name you log in with is the full slot name.
 
-The disc shows "player - item", so those names are kept to 16 and 28 printable ASCII characters. Every other entry is still the in-game item id. `itemsDistribution` counts only those ids.
+## Shop prices for another player's item
 
-When the randomizer patches from a Multiworld file, it writes the apworld version, the player, and the seed into the executable. The BizHawk client reads them. It logs in as that player, and it disconnects if the room's seed is different. The checks and the goal are reported to the room.
+Naomi's Item #4, Lurvy's Item #5, and the Life Vessel that replaces Lurvy's Item #5 can sell another player's item. The price follows how early that shelf can be reached, and whether the item is progression, useful, filler, or a trap. Sphere 1 is the first set of checks reachable at the start, the same numbering as the room's sphere tracker.
 
-A remote item on Naomi's Item #4, Lurvy's Item #5, or the Life Vessel that replaces Lurvy's Item #5 also records `price`, the gilder that shelf charges. A progression item costs 100 in sphere 1, 200 in sphere 2, 300 in sphere 3, 400 in sphere 4, and 500 from sphere 5 on. Sphere 1 is the first set of checks reachable at the start, the same numbering as the room's sphere tracker. A useful item costs 250. A filler item costs 100. A trap costs 50. An Alundra item on those shelves keeps that item's gold value.
+| Item | Price |
+| --- | --- |
+| Progression in sphere 1 through 4 | 100 gilder times the sphere |
+| Progression in sphere 5 and later | 500 |
+| Useful | 250 |
+| Filler | 100 |
+| Trap | 50 |
 
-Restocking Shop Items defaults to Full Variety. The eight shelves at Lurvy's and Naomi's are shuffled, and one each of Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, and Wonder Essence is always on them, so every healing item can be bought at either shop. The other three shelves are filled from the item pool. They refuse a progression item. A useful item such as a ring can still land on one. Vanilla instead keeps the retail stock: Lurvy sells all five, and Naomi sells Herbs, Strength Tonic, and Magic Elixyr. Wonder Essence replaces Lurvy's one-time shelf after that shelf has been bought twice. Randomized fills all eight from the item pool, with the same refusal. The placement file records the item ids. Those shelves are left out of the world's location list and the room's check list. A remote item cannot sit on one: the shelf would offer it again, which spends gilder and adds nothing. A one-time shelf may still sell a progression item. Merrick's trades are checks and are not part of this option.
-
-The item on the table in Tarn's Manor and the Fairy Pond chests also refuse a precious item, a progression item, and a remote item. The fill still places an item there, and the placement file records it. A check marked non-progression still refuses a progression item.
-
-An Alundra item placed in another game is absent from this file. Archipelago records it on that game's check.
+An Alundra item on those shelves keeps that item's own price.
 
 ## Credit
 
-Dinopony wrote the original Alundra randomizer. The current version of that project, and the logic data copied into this world, is https://github.com/Lunesar/alundra-randomizer.
+Dinopony wrote the original Alundra randomizer. This world patches with [alundra-randomizer](https://github.com/Lunesar/alundra-randomizer). The logic data in this repository is copied from there.

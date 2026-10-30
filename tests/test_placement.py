@@ -108,7 +108,7 @@ class PlacementTests(unittest.TestCase):
         )
         self.assertEqual(document["format"], FORMAT_MULTIWORLD)
         self.assertEqual(document["apworldVersion"], apworld_version())
-        self.assertEqual(apworld_version(), "0.1.9")
+        self.assertEqual(apworld_version(), "0.2.0")
         # The login name is kept whole. The disc line on the placement is not.
         self.assertEqual(document["player"], "Néstor\\Room")
         self.assertEqual(document["seed"], 7)

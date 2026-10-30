@@ -12,7 +12,7 @@ Install [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases) 0.6
 
 `.apignore` leaves [docs/TODO.md](docs/TODO.md), [docs/client_memory.md](docs/client_memory.md), and [data/README.md](data/README.md) out of the apworld. The setup guide and the game page stay in.
 
-Place the patcher under `patcher/linux` and `patcher/win32` from the [alundra-randomizer](https://github.com/Lunesar/alundra-randomizer) release named in `randomizer.lock.json`. The workflow artifacts are `alundra-randomizer-linux` and `alundra-randomizer-win64`.
+Place the patcher under `patcher/linux` and `patcher/win32` from the [alundra-randomizer](https://github.com/Lunesar/alundra-randomizer) release named in `randomizer.lock.json`. The workflow artifacts are `alundra-aptools-linux` and `alundra-aptools-win64`.
 
 ## Credit
 

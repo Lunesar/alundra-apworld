@@ -14,8 +14,19 @@ Install [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases) 0.6
 
 Place the patcher under `patcher/linux` and `patcher/win32` from the [alundra-randomizer](https://github.com/Lunesar/alundra-randomizer) release named in `randomizer.lock.json`. The workflow artifacts are `alundra-aptools-linux` and `alundra-aptools-win64`.
 
-## Credit
+## Credits
 
 Dinopony wrote the original Alundra randomizer. This world patches with [alundra-randomizer](https://github.com/Lunesar/alundra-randomizer).
 
 Released under the MIT License. See [LICENSE](LICENSE).
+
+## AI disclosure
+
+Development was assisted with AI in the following ways:
+- Parsing original game data and memory for client integration and game modification
+- Writing unit tests
+- Maintaining documentation
+- Recommending code implementation
+
+All AI generated code and documentation recommendations were manually reviewed, edited, iterated on, and approved by hand.
+This repository contains no AI-generated art.

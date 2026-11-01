@@ -89,8 +89,7 @@ def allows_outside_item(
     Manor, and every Fairy Pond chest. A precious Alundra item cannot sit
     there. A remote item cannot either: the shelf offers it again, and the
     pond seals after the reward scene, so a chest left behind is missed.
-    FIXME: keep the Fairy Pond open and give the reward chest (id 145) a
-    real collected flag, then drop forbidPreciousItems on these chests.
+    FIXME: keep the Fairy Pond, then drop forbidPreciousItems on these chests.
     A non-progression check still refuses a progression item.
     """
     if forbid_precious:

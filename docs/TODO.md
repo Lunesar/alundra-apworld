@@ -42,7 +42,7 @@ The Fairy Pond and the Book of Elna are marked in `world_shuffler.cpp`, `placeme
 
   The pond seals after the reward, so a chest left behind is missed. Every Fairy Pond chest sets `forbidPreciousItems` and stays out of the location list for that reason. Chests 139–144 already have event codes (959, 957, 950, 954, 955, 956). The pond's clear flag is not named in `flags.hpp`. The patch keeps the pond open after the reward so those chests can be collected later. Once it stays open, drop `forbidPreciousItems` on 139–144 and let the client watch the codes they already have.
 
-- [ ] Give the Fairy Pond reward chest a collected flag.
+- [x] Give the Fairy Pond reward chest a collected flag.
 
   Source 145, address `24A57C6`, vanilla Fiend Blade, has no `eventCode`. Add a flag the chest script sets when the chest is taken, and that stays set when the room loads again. The client watches that code. Drop `forbidPreciousItems` on 145 along with the other pond chests.
 

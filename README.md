@@ -20,7 +20,7 @@ Dinopony wrote the original Alundra randomizer. This world patches with [alundra
 
 Released under the MIT License. See [LICENSE](LICENSE).
 
-## AI disclosure
+## AI Disclosure
 
 Development was assisted with AI in the following ways:
 - Parsing original game data and memory for client integration and game modification

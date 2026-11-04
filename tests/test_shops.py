@@ -202,7 +202,8 @@ class RestockingShopTests(unittest.TestCase):
         self.assertNotIn("Herbs", progression)
         unreported = [source for source in GAME_DATA.sources if source.forbid_precious]
         unreported_ids = {source.id for source in unreported}
-        self.assertTrue({129, *range(139, 146)} <= unreported_ids)
+        self.assertTrue({129} <= unreported_ids)
+        self.assertTrue(unreported_ids.isdisjoint(range(139, 146)))
         self.assertTrue(any(source.has_price for source in unreported))
         for source in unreported:
             self.assertTrue(forbid_progression(

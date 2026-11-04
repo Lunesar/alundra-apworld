@@ -480,7 +480,7 @@ def location_sources(game_data: GameData) -> tuple[ItemSourceRecord, ...]:
 def restocking_shop_sources(game_data: GameData) -> tuple[ItemSourceRecord, ...]:
     # A shelf that restocks has a price and refuses a precious item. A one-time
     # shop check has a price and does not set forbidPreciousItems. Tarn's table
-    # and the Fairy Pond chests refuse a precious item and have no price.
+    # refuses a precious item and has no price.
     return tuple(
         source for source in game_data.sources
         if source.forbid_precious and source.has_price

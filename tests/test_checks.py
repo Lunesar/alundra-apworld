@@ -268,13 +268,13 @@ class CheckTests(unittest.TestCase):
         for source in precious:
             self.assertNotIn(source.id, watched, source.pretty_name)
             self.assertNotIn(source.pretty_name, LOCATION_NAME_TO_ID)
-        # Chests 139-145 keep their event codes. The pond still seals, so the
-        # watcher skips them. The reward chest flag is 0x03B8.
+        # The pond stays open, so chests 139-145 are watched. The reward flag
+        # is 0x03B8.
         for source_id in range(139, 146):
             source = GAME_DATA.source_by_id[source_id]
-            self.assertTrue(source.forbid_precious, source.pretty_name)
+            self.assertFalse(source.forbid_precious, source.pretty_name)
             self.assertIsNotNone(source.event_code, source.pretty_name)
-            self.assertNotIn(source.id, watched, source.pretty_name)
+            self.assertIn(source.id, watched, source.pretty_name)
         self.assertEqual(GAME_DATA.source_by_id[145].event_code, 0x03B8)
 
     def test_game_beaten_is_the_ending_word(self) -> None:

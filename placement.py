@@ -71,11 +71,11 @@ def forbid_progression(
 ) -> bool:
     """A source that is not a check refuses this progression item.
 
-    forbidPreciousItems marks the restocking shelves, the table in Tarn's
-    Manor, and every Fairy Pond chest. Those sources are filled, then left
-    out of the location list, so the room never hears about the item. A
-    check may still hold one. When the pond and the table gain a collected
-    flag, forbidPreciousItems comes off and this refusal lifts.
+    forbidPreciousItems marks the restocking shelves and the table in Tarn's
+    Manor. Those sources are filled, then left out of the location list, so
+    the room never hears about the item. A check may still hold one. When
+    the table gains a collected flag, forbidPreciousItems comes off and this
+    refusal lifts.
     """
     return forbid_precious and name in progression
 
@@ -85,11 +85,9 @@ def allows_outside_item(
 ) -> bool:
     """A remote item may fill a check.
 
-    forbidPreciousItems marks the restocking shelves, the table in Tarn's
-    Manor, and every Fairy Pond chest. A precious Alundra item cannot sit
-    there. A remote item cannot either: the shelf offers it again, and the
-    pond seals after the reward scene, so a chest left behind is missed.
-    FIXME: keep the Fairy Pond, then drop forbidPreciousItems on these chests.
+    forbidPreciousItems marks the restocking shelves and the table in Tarn's
+    Manor. A precious Alundra item cannot sit there. A remote item cannot
+    either: the shelf offers it again, and the table item comes back.
     A non-progression check still refuses a progression item.
     """
     if forbid_precious:

@@ -36,15 +36,15 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
 ## Randomizer enhancements
 
-The Fairy Pond and the Book of Elna are marked in `world_shuffler.cpp`, `placement.py`, and both copies of `docs/client_memory.md`. `item_source.json` is shared. A flag added for one of these sources is copied into the apworld data, `forbidPreciousItems` comes off that source, and the client watches the new code.
+The Book of Elna is marked in `world_shuffler.cpp`, `placement.py`, and `docs/client_memory.md`. `item_source.json` is shared. A flag added for that source is copied into the apworld data, `forbidPreciousItems` comes off that source, and the client watches the new code.
 
-- [ ] Keep the Fairy Pond open.
+- [x] Keep the Fairy Pond open.
 
-  The pond seals after the reward, so a chest left behind is missed. Every Fairy Pond chest sets `forbidPreciousItems` and stays out of the location list for that reason. Chests 139–144 already have event codes (959, 957, 950, 954, 955, 956). The pond's clear flag is not named in `flags.hpp`. The patch keeps the pond open after the reward so those chests can be collected later. Once it stays open, drop `forbidPreciousItems` on 139–144 and let the client watch the codes they already have.
+  `PatchFairyPond` skips `FlagOn 0x03A3` at `0x24A56B6`, and map 158 B[4] skips its wait so the entrance pad warps out before Stenia's scene. The blocks that close the way back to the reward room never spawn, and the overworld whirlpool stays. The pad lands at (2, 27), one tile north of the whirlpool, and the whirlpool entry lands at (5, 53), one tile off the exit pad. Chests 139–145 are checks.
 
 - [x] Give the Fairy Pond reward chest a collected flag.
 
-  Source 145, address `24A57C6`, vanilla Fiend Blade, has no `eventCode`. Add a flag the chest script sets when the chest is taken, and that stays set when the room loads again. The client watches that code. Drop `forbidPreciousItems` on 145 along with the other pond chests.
+  Source 145, address `24A57C6`, vanilla Fiend Blade. `PatchFairyPond` writes event code `0x03B8` into the collected halfword. The client watches that code, and the other pond chests with it.
 
 - [ ] Give the Book of Elna a collected flag, and leave it taken.
 

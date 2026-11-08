@@ -276,6 +276,10 @@ class CheckTests(unittest.TestCase):
             self.assertIsNotNone(source.event_code, source.pretty_name)
             self.assertIn(source.id, watched, source.pretty_name)
         self.assertEqual(GAME_DATA.source_by_id[145].event_code, 0x03B8)
+        table = GAME_DATA.source_by_id[129]
+        self.assertFalse(table.forbid_precious, table.pretty_name)
+        self.assertEqual(table.event_code, 0x03B9)
+        self.assertIn(table.id, watched, table.pretty_name)
 
     def test_game_beaten_is_the_ending_word(self) -> None:
         # The phase word is the u32 immediately before the requested map id.

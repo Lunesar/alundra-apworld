@@ -17,7 +17,8 @@
 # the source address only for those entity chests. A one-time shop purchase
 # sets its FlagOn later in the same script, after opcode 0x82. A Merrick trade
 # sets its FlagOn in the spawned trade script, after latch 0x8065 and before
-# opcode 0x82. King Snow sets FlagOn after 0x82 on the success path. Each
+# opcode 0x82. King Snow sets FlagOn after 0x82 on the success path. Tarn's Manor
+# table (id 129) sets FlagOn 0x03B9 after 0x82 when the give succeeds. Each
 # casino second reward sets FlagOn in that give script, before 0x82. Those
 # codes are eventCode too. The item id is the argument of 0x82, which is the
 # source address. The two bytes before it are not a flag. Restocking shelves

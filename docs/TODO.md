@@ -36,8 +36,6 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
 ## Randomizer enhancements
 
-The Book of Elna is marked in `world_shuffler.cpp`, `placement.py`, and `docs/client_memory.md`. `item_source.json` is shared. A flag added for that source is copied into the apworld data, `forbidPreciousItems` comes off that source, and the client watches the new code.
-
 - [x] Keep the Fairy Pond open.
 
   `PatchFairyPond` skips `FlagOn 0x03A3` at `0x24A56B6`, and map 158 B[4] skips its wait so the entrance pad warps out before Stenia's scene. The blocks that close the way back to the reward room never spawn, and the overworld whirlpool stays. The pad lands at (2, 27), one tile north of the whirlpool, and the whirlpool entry lands at (5, 53), one tile off the exit pad. Chests 139–145 are checks.
@@ -46,9 +44,9 @@ The Book of Elna is marked in `world_shuffler.cpp`, `placement.py`, and `docs/cl
 
   Source 145, address `24A57C6`, vanilla Fiend Blade. `PatchFairyPond` writes event code `0x03B8` into the collected halfword. The client watches that code, and the other pond chests with it.
 
-- [ ] Give the Book of Elna a collected flag, and leave it taken.
+- [x] Give the Tarn's Manor table a collected flag, and leave it taken.
 
-  Source 129 is the ground item on the table in Tarn's Manor (`spriteAddress` `1BA5D06`). It has no `eventCode`, so it comes back when the room loads again. `forbidPreciousItems` keeps it out of the check list. The patch already clears the byte at `0x1BA5D05`. Add an event code. Taking the book sets that flag, and entering the room again does not put the book back. The client then watches source 129.
+  Source 129, sprite `1BA5D06`, give argument `1BA5730`. `PatchTarnManor` sets event code `0x03B9` when opcode `0x82` adds the item. A later visit does not put the sprite back. Story flag `0x006C` is unchanged. The client watches source 129. A seed generated before this change does not contain the location.
 
 - [ ] Stop Lurvy from selling an Alundra item whose stack is already full.
 

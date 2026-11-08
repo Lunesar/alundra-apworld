@@ -209,6 +209,15 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(encoded["player"], "Player")
         self.assertEqual(encoded["item"], "Item")
 
+    def test_tarn_manor_table_accepts_remote_items(self) -> None:
+        source = GAME_DATA.source_by_id[129]
+        self.assertFalse(source.forbid_precious)
+        self.assertEqual(source.event_code, 0x03B9)
+        self.assertTrue(allows_outside_item(
+            block_progression=False, progression=False,
+            forbid_precious=source.forbid_precious,
+        ))
+
     def test_fairy_pond_chests_accept_remote_items(self) -> None:
         # The pond stays open after the reward scene. Ids 139-145 are checks.
         for source_id in range(139, 146):

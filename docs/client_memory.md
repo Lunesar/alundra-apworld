@@ -302,6 +302,7 @@ Named flags, in the order `flags.hpp` declares them. "Set on new game" is the un
 | `FLAG_CASINO_SLIME_4_WINS` | `0x801DD3F8` | 0 | `0x0620` | no |
 | `FLAG_CASINO_SLIME_BANNED` | `0x801DD3F8` | 2 | `0x0622` | no |
 | `FLAG_LURVY_WELCOMED_US_ONCE` | `0x801DD3BE` | 2 | `0x0452` | yes |
+| `FLAG_OVERWORLD_D3_MURGG_AMBUSH_DONE` | `0x801DD402` | 2 | `0x0672` | yes. Map 15 B[1] skips the Murgg ambush at the Tarn's Manor door. |
 | `FLAG_ANCIENT_SHRINE_SYBOLS_PILLAR_ROOM_CLEARED` | `0x801DD3F8` | 7 | `0x0627` | no |
 | `FLAG_JESS_TALKED_LEAVING_HOUSE_ON_GAME_START` | `0x801DD334` | 7 | `0x0007` | no. Reused by the randomizer as the Magyscar bush flag. |
 | `FLAG_FAIRY_POND_REWARD_CHEST` | `0x801DD3AB` | 0 | `0x03B8` | no. Reward chest on Fairy Pond map 161. `PatchFairyPond` leaves vanilla seal bit `0x03A3` clear. |

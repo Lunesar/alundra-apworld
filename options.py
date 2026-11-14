@@ -14,8 +14,9 @@ class ProgressiveItems(Toggle):
     """Replace weapon, armor, and spell tiers with upgrade items.
 
     Boots stay as separate items unless Split Boots Effects is off.
-    A path that required a tier-T item then requires T+1 upgrades, which is how
-    the randomizer rewrites its logic.
+    A path requires enough upgrades for the in-game grant to reach that tier.
+    Short Boots, the Dagger, and Cloth Armor start owned, so Charm Boots is
+    three Boots upgrades. An empty slot still takes one more than the tier.
     """
     display_name = "Progressive Items"
     default = 1

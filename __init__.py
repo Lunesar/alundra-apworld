@@ -58,7 +58,7 @@ from .logic import (
     build_item_pool,
     choose_restock_locks,
     fixed_location_map,
-    folded_item_names,
+    items_replaced_by_upgrades,
 )
 from .options import AlundraOptions, option_groups
 from .patcher import launch_patch
@@ -609,9 +609,9 @@ class AlundraWorld(World):
     def _warn_progressive_start(self, owned: Counter[str]) -> None:
         if not self._settings.progressive_items:
             return
-        folded = folded_item_names(GAME_DATA, self._settings.split_boots_effects)
+        replaced = items_replaced_by_upgrades(GAME_DATA, self._settings.split_boots_effects)
         skipped = set(REQUIRED_STARTING_ITEMS)
-        warned = sorted(name for name in owned if name in folded and name not in skipped and owned[name])
+        warned = sorted(name for name in owned if name in replaced and name not in skipped and owned[name])
         if not warned:
             return
         logger.warning(

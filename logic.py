@@ -90,6 +90,8 @@ class LogicGraph:
 class _SlotGroup:
     upgrade_name: str
     members: tuple[ItemRecord, ...]
+    # -1 when the slot is empty. 0 is a real tier, so empty cannot be stored as 0.
+    owned_tier: int = -1
 
 
 def resolve_active_crests(settings: LogicSettings) -> tuple[str, ...]:
@@ -137,12 +139,17 @@ def preplaced_crest_names(settings: LogicSettings) -> list[str]:
     return [name for name in CRESTS if name not in active]
 
 
-def _slot_groups(game_data: GameData, split_boots: bool) -> tuple[_SlotGroup, ...]:
+def _slot_groups(
+    game_data: GameData,
+    split_boots: bool,
+    starting_inventory: tuple[str, ...] = (),
+) -> tuple[_SlotGroup, ...]:
     by_slot: dict[int, list[ItemRecord]] = defaultdict(list)
     for item in game_data.items:
         if item.in_game_id == 0:
             continue
         by_slot[item.slot_id].append(item)
+    starting = set(starting_inventory)
 
     groups: list[_SlotGroup] = []
     for slot_id, slot_items in by_slot.items():
@@ -153,32 +160,52 @@ def _slot_groups(game_data: GameData, split_boots: bool) -> tuple[_SlotGroup, ..
             raise LogicError(f"Slot {slot_id} has more than one upgrade item.")
         upgrade = upgrades[0]
         # Boots stay individual items when their effects are split. The randomizer
-        # only folds boots into Boots upgrade when splitBootsEffects is false.
+        # only converts boots into Boots upgrade when splitBootsEffects is false.
         if split_boots and upgrade.name == "Boots upgrade":
             continue
         members = tuple(item for item in slot_items if item.tier != UPGRADE_TIER)
-        groups.append(_SlotGroup(upgrade.name, members))
+        owned_tier = -1
+        for member in members:
+            if member.name in starting:
+                owned_tier = max(owned_tier, member.tier)
+        groups.append(_SlotGroup(upgrade.name, members, owned_tier))
     return tuple(groups)
 
 
+def _progressive_groups(game_data: GameData, settings: LogicSettings) -> tuple[_SlotGroup, ...] | None:
+    # None keeps every path on its named tiers. Progressive mode rewrites those
+    # tiers using the starting inventory the settings actually carry.
+    if not settings.progressive_items:
+        return None
+    return _slot_groups(game_data, settings.split_boots_effects, settings.starting_inventory)
+
+
+def _upgrades_to_reach(tier: int, owned_tier: int) -> int:
+    # Empty slot: the first pickup grants tier 0, so tier T takes T + 1.
+    # Owned slot: the next pickup grants owned_tier + 1, so tier T takes T - owned_tier.
+    if owned_tier < 0:
+        return tier + 1
+    return tier - owned_tier
+
+
 def convert_requirement(required: tuple[str, ...], groups: tuple[_SlotGroup, ...]) -> tuple[tuple[str, int], ...]:
-    # One occurrence of each matching tier item is replaced by (tier + 1) upgrades.
-    # This is RandomizerWorld::handle_progressive_items. A Holy Sword (tier 3) gate
-    # becomes four Sword upgrades. The player already owns the tier-0 piece (Dagger,
-    # Cloth Armor, Short Boots), and the in-game hook advances from that owned tier,
-    # so the count is one higher than the number of pickups the hook needs.
+    # This is for RandomizerWorld::handle_progressive_items. A matching tier item
+    # becomes the number of upgrade pickups the in-game hook needs to grant it.
+    # Short Boots, the Dagger, and Cloth Armor start owned, so Charm Boots
+    # (tier 3) is three Boots upgrades and Holy Sword (tier 3) is three Sword
+    # upgrades. Hunter's Bow (tier 0, and not owned) is one Bow upgrade.
     counts: Counter[str] = Counter(required)
     for group in groups:
-        highest_tier = 0
+        highest = 0
         found = False
         for member in group.members:
             if counts[member.name] <= 0:
                 continue
             counts[member.name] -= 1
             found = True
-            highest_tier = max(highest_tier, member.tier + 1)
-        if found:
-            counts[group.upgrade_name] += highest_tier
+            highest = max(highest, _upgrades_to_reach(member.tier, group.owned_tier))
+        if found and highest > 0:
+            counts[group.upgrade_name] += highest
     return tuple(sorted((name, count) for name, count in counts.items() if count > 0))
 
 
@@ -211,7 +238,7 @@ def build_graph(game_data: GameData, settings: LogicSettings) -> LogicGraph:
     active = resolve_active_crests(settings)
     excluded = tuple(name for name in CRESTS if name not in active)
     excluded_nodes = {CREST_NODES[name] for name in excluded}
-    groups = _slot_groups(game_data, settings.split_boots_effects) if settings.progressive_items else None
+    groups = _progressive_groups(game_data, settings)
 
     edges: list[Edge] = []
     present = {(path.origin, path.destination) for path in game_data.paths}
@@ -250,7 +277,7 @@ def build_graph(game_data: GameData, settings: LogicSettings) -> LogicGraph:
     )
 
 
-def folded_item_names(game_data: GameData, split_boots: bool) -> frozenset[str]:
+def items_replaced_by_upgrades(game_data: GameData, split_boots: bool) -> frozenset[str]:
     # Tier items that progressive mode rewrites. The upgrade item itself is not included.
     names: set[str] = set()
     for group in _slot_groups(game_data, split_boots):
@@ -340,7 +367,7 @@ def build_item_pool(game_data: GameData, settings: LogicSettings) -> list[str]:
     # A locked restocking shelf is not an open location and does not take its item
     # out of the distribution. One Herbs leaves the pool per locked shelf.
     active = resolve_active_crests(settings)
-    groups = _slot_groups(game_data, settings.split_boots_effects) if settings.progressive_items else None
+    groups = _progressive_groups(game_data, settings)
     counts = Counter(DEFAULT_DISTRIBUTION)
     if groups is not None:
         counts = convert_distribution(counts, groups)

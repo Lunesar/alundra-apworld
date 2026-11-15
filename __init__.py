@@ -132,6 +132,7 @@ class AlundraWebWorld(WebWorld):
             "starting_gold": 0,
             "allow_spoiler_log": True,
             "restocking_shop_items": "full_variety",
+            "shop_hints": "all",
             "start_inventory": {
                 "Dagger": 1,
                 "Cloth Armor": 1,
@@ -394,6 +395,7 @@ class AlundraWorld(World):
             "split_boots_effects": self._settings.split_boots_effects,
             "skip_last_dungeon": self._settings.skip_last_dungeon,
             "item_id_base": ITEM_ID_BASE,
+            "shop_hints": self.options.shop_hints.current_key,
         }
 
     def write_spoiler(self, spoiler_handle) -> None:

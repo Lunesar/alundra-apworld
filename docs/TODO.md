@@ -6,11 +6,7 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
 ## Quality of life
 
-- [ ] Confirm a generate on the Archipelago website writes the placement file, once Alundra is core.
-
-  The website calls the same `generate_output`. archipelago.gg rolls only worlds installed on that site. Uploading a Launcher zip already puts the container on a room. This item is a generate started on the site.
-
-- [ ] Ship the world as `alundra.apworld`.
+- [x] Ship the world as `alundra.apworld`.
 
   An `.apworld` is a zip. The file name is all lowercase. Inside it, a folder of that same name holds the world: `alundra/__init__.py`, the other modules, `docs/`, `data/`, and `patcher/`. The folder name comes from `worlds/alundra`, the link used for development. This checkout is `alundra-apworld`.
 
@@ -24,15 +20,17 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
   `.apignore` lists what stays out of the zip. The setup guide and the game page stay. `data.py` loads `data/*.json` with `importlib.resources`, so the same load works from this checkout and from the zip.
 
-- [ ] Report a location hint when the player reads one in the game, or looks at a shop shelf that is a check.
+- [x] Report a shop check when the player enters Naomi's, Lurvy's, or Merrick's.
 
-  The client sends `LocationChecks` for a watched flag. It does not send `LocationScouts`. The randomizer writes hint sentences into dialogue at patch time (`PatchApplyHintText`). The room never hears that the player read one. Archipelago hint points are not spent inside the game.
+  Shop Hints is `all` or `next`, default `all`, and `fill_slot_data` sends it as `shop_hints`. A ready watch on map 398, 258, or 134 sends `LocationScouts` with `create_as_hint` 2 for the checks that shop still has. `all` sends every remaining one. `next` sends the first whose purchase bit is clear. Restocking shelves have no location id. The repaired Ancient Armor is not included. Its trigger is the chimney secret bit, which is not in the address map yet.
 
-  When the player reads a hint, or sees the item on a shop shelf that is a location, send `LocationScouts` for those location ids with `create_as_hint` set to 2. That records a hint for the room and broadcasts it once. It does not spend hint points. Skip a location this client has already scouted. A non-zero `create_as_hint` stores a hint even after the location is checked, so a shelf the player already bought stays a check and is not scouted again.
+- [ ] Report a location hint when the player reads one in the game.
 
-  The twelve speakers are Lars, Jeal, Miming, Vul, Wilda, Uma, Zazan in the Coal Mine, the Ancient Shrine priest, Stenia, Zazan in the Great Tree, Nava, and Jess. An item hint names one item and one place (`random_hint_for_item` picks one source). A region hint says that something useful lies in a region, or that nothing of interest does, and names no check. The dialogue string does not carry a location id. The patch has to store, for each speaker, the location ids that sentence refers to, where the client can read them when that dialogue is on screen. A region hint with no check sends nothing.
+  The randomizer writes hint sentences into dialogue at patch time (`PatchApplyHintText`). The room never hears that the player read one. Archipelago hint points are not spent inside the game.
 
-  The one-time shelves are the shop checks: Lurvy's Item #5, its first replacement, the repaired Ancient Armor, and Naomi's Item #4. Looking at that stock is the scout. Buying it is already the check. The eight restocking shelves are not locations, so a look at them has no id to send. The client does not yet know which map is on screen or which string is showing. Those reads belong in `docs/client_memory.md` once the addresses are known.
+  When the player reads a hint, send `LocationScouts` for those location ids with `create_as_hint` set to 2. That records a hint for the room and broadcasts it once. It does not spend hint points. Skip a location this client has already scouted. A non-zero `create_as_hint` stores a hint even after the location is checked.
+
+  The twelve speakers are Lars, Jeal, Miming, Vul, Wilda, Uma, Zazan in the Coal Mine, the Ancient Shrine priest, Stenia, Zazan in the Great Tree, Nava, and Jess. An item hint names one item and one place (`random_hint_for_item` picks one source). A region hint says that something useful lies in a region, or that nothing of interest does, and names no check. The dialogue string does not carry a location id. The patch has to store, for each speaker, the location ids that sentence refers to, where the client can read them when that dialogue is on screen. A region hint with no check sends nothing. The current sentences are region phrases, so registering one would name a chest the line does not. That generator is a separate change.
 
 ## Randomizer enhancements
 

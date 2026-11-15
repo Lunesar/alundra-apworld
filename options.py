@@ -1,4 +1,8 @@
-"""Player options. Each one is written into the placement file under the same meaning."""
+"""Player options.
+
+Patch settings are written into the placement file. Shop Hints is sent to the
+client in slot data and does not change the disc.
+"""
 
 from __future__ import annotations
 from dataclasses import dataclass
@@ -168,6 +172,27 @@ class RestockingShopItems(Choice):
     default = 1
 
 
+class ShopHints(Choice):
+    """Which checks the client reports to the room when you enter a shop.
+
+    All is the default. With control inside Naomi's, Lurvy's, or Merrick's,
+    the room learns every check that shop still has. Naomi has Item #4.
+    Lurvy has Item #5 and the shelf that replaces it after that purchase.
+    Merrick has all eight Gilded Falcon trades. A shelf that restocks is not
+    a check. Lurvy's armor repair is not reported from the shop.
+
+    Next reports the one check on offer. That is Naomi's Item #4, Lurvy's
+    Item #5 until it is bought and then its replacement, or Merrick's lowest
+    remaining falcon trade.
+
+    A check already found is left alone. The report does not spend hint points.
+    """
+    display_name = "Shop Hints"
+    option_all = 0
+    option_next = 1
+    default = 0
+
+
 @dataclass
 class AlundraOptions(PerGameCommonOptions):
     progressive_items: ProgressiveItems
@@ -185,6 +210,7 @@ class AlundraOptions(PerGameCommonOptions):
     fixed_item_sources: FixedItemSources
     item_sources_without_progression: ItemSourcesWithoutProgression
     restocking_shop_items: RestockingShopItems
+    shop_hints: ShopHints
 
 
 option_groups = [
@@ -196,6 +222,9 @@ option_groups = [
         FixedItemSources,
         ItemSourcesWithoutProgression,
         RestockingShopItems,
+    ]),
+    OptionGroup("Client", [
+        ShopHints,
     ]),
     OptionGroup("Patch", [
         OriginalGameBalance,

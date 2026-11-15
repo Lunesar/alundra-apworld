@@ -24,11 +24,18 @@ from alundra.checks import (
     GOAL_ENDING,
     GOAL_PHASE,
     LOCATION_CHECKS,
+    MAP_LURVY_SHOP,
+    MAP_MERRICK_SHOP,
+    MAP_NAOMI_SHOP,
+    SHOP_CHECKS,
+    SHOP_HINT_ALL,
+    SHOP_HINT_NEXT,
     LocationCheck,
     checked_locations,
     flag_read,
     game_beaten,
     names_for,
+    shop_hint_locations,
 )
 from alundra.data import GAME_DATA, LOCATION_NAME_TO_ID
 from alundra.receive import REQUESTED_MAP
@@ -291,3 +298,107 @@ class CheckTests(unittest.TestCase):
         self.assertFalse(game_beaten(b"\x09\x00\x00"))
         self.assertFalse(game_beaten(b""))
         self.assertFalse(game_beaten((9).to_bytes(4, "big")))
+
+
+def _purchase_flags(bought: set[int]) -> bytes:
+    size = max(check.byte_index for check in LOCATION_CHECKS) + 1
+    buf = bytearray(size)
+    by_id = {check.location_id: check for check in LOCATION_CHECKS}
+    for location_id in bought:
+        check = by_id[location_id]
+        buf[check.byte_index] |= check.mask
+    return bytes(buf)
+
+
+class ShopHintTests(unittest.TestCase):
+    def test_shop_tables_are_the_one_time_checks(self) -> None:
+        self.assertEqual(
+            [check.location_id for check in SHOP_CHECKS[MAP_LURVY_SHOP]],
+            [266, 267],
+        )
+        self.assertEqual(
+            [check.location_id for check in SHOP_CHECKS[MAP_NAOMI_SHOP]],
+            [273],
+        )
+        self.assertEqual(
+            [check.location_id for check in SHOP_CHECKS[MAP_MERRICK_SHOP]],
+            [254, 255, 256, 257, 258, 259, 260, 261],
+        )
+        hinted = {check.location_id for checks in SHOP_CHECKS.values() for check in checks}
+        # The repair waits on the chimney bit. Restocking shelves have no id.
+        self.assertNotIn(269, hinted)
+        for source_id in (262, 263, 264, 265, 268, 270, 271, 272):
+            self.assertNotIn(source_id, hinted)
+
+    def test_all_reports_every_remaining_check(self) -> None:
+        clear = _purchase_flags(set())
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_ALL, clear, 0),
+            [266, 267],
+        )
+        self.assertEqual(
+            shop_hint_locations(MAP_NAOMI_SHOP, SHOP_HINT_ALL, clear, 0),
+            [273],
+        )
+        self.assertEqual(
+            shop_hint_locations(MAP_MERRICK_SHOP, SHOP_HINT_ALL, clear, 0),
+            [254, 255, 256, 257, 258, 259, 260, 261],
+        )
+        self.assertEqual(shop_hint_locations(7, SHOP_HINT_ALL, clear, 0), [])
+        # A missing slot value is the same as all.
+        self.assertEqual(shop_hint_locations(MAP_LURVY_SHOP, None, clear, 0), [266, 267])
+
+    def test_next_reports_the_offer(self) -> None:
+        clear = _purchase_flags(set())
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_NEXT, clear, 0),
+            [266],
+        )
+        bought_first = _purchase_flags({266})
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_NEXT, bought_first, 0),
+            [267],
+        )
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_ALL, bought_first, 0),
+            [267],
+        )
+        both = _purchase_flags({266, 267})
+        self.assertEqual(shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_NEXT, both, 0), [])
+        self.assertEqual(shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_ALL, both, 0), [])
+        # Naomi has one check, so the two modes match.
+        self.assertEqual(
+            shop_hint_locations(MAP_NAOMI_SHOP, SHOP_HINT_NEXT, clear, 0),
+            [273],
+        )
+        first_trade = _purchase_flags({254})
+        self.assertEqual(
+            shop_hint_locations(MAP_MERRICK_SHOP, SHOP_HINT_NEXT, first_trade, 0),
+            [255],
+        )
+        self.assertEqual(
+            shop_hint_locations(MAP_MERRICK_SHOP, SHOP_HINT_ALL, first_trade, 0),
+            [255, 256, 257, 258, 259, 260, 261],
+        )
+
+    def test_a_found_check_is_not_scouted(self) -> None:
+        clear = _purchase_flags(set())
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_ALL, clear, 0, skip={266}),
+            [267],
+        )
+        # The replacement is not on the counter while Item #5 is still the offer.
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_NEXT, clear, 0, skip={266}),
+            [],
+        )
+        self.assertEqual(
+            shop_hint_locations(MAP_MERRICK_SHOP, SHOP_HINT_ALL, clear, 0, skip={254, 261}),
+            [255, 256, 257, 258, 259, 260],
+        )
+
+    def test_a_short_flag_read_sends_nothing(self) -> None:
+        self.assertEqual(
+            shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_ALL, b"\x00", 0),
+            [],
+        )

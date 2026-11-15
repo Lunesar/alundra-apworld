@@ -20,7 +20,9 @@ Archipelago leaves the following out of the check list. Each one still receives 
 
 - The eight shelves that restock at Lurvy's and Naomi's. Restocking Shop Items chooses what they sell. A useful item such as a ring can still land on a shelf the fill chooses. A full stack of Herbs, Strength Tonic, Strength Elixyr, Magic Elixyr, or Wonder Essence, sent from another game, is paid out as that item's shop price in gilder: 5, 20, 50, 30, or 200. These shelves are where you can buy the item again. At 9999 gilder the payout is still counted and the purse stays full.
 
-Hints in the game are written when the disc is patched. Archipelago hint points are not used in the game.
+NPC hints are written into the dialogue when the disc is patched. Those lines are not sent to the room.
+
+Entering Naomi's shop, Lurvy's shop, or Merrick's shop reports that shop's checks. Shop Hints chooses how many. All, the default, reports every check the shop still has: Naomi's Item #4, Lurvy's Item #5 and the shelf that replaces it, and Merrick's eight Gilded Falcon trades. Next reports the one on offer. That is Naomi's Item #4, Lurvy's Item #5 until it is bought and then its replacement, or Merrick's lowest remaining trade. Shelves that restock are not checks, and Lurvy's armor repair is not reported from the doorway. A check you have already found is not reported again. This does not spend hint points.
 
 Another player's item is shown as "player - item". The player name is kept to 16 printable ASCII characters and the item name to 28, so the line fits on the disc. The name you log in with is the full slot name.
 

@@ -128,3 +128,64 @@ def game_beaten(phase: bytes) -> bool:
     if len(phase) != 4:
         return False
     return int.from_bytes(phase, "little") == GOAL_ENDING
+
+
+# Loaded map ids. docs/client_memory.md. Naomi's door stays on 258.
+MAP_LURVY_SHOP = 398
+MAP_NAOMI_SHOP = 258
+MAP_MERRICK_SHOP = 134
+
+# Slot-data value for Shop Hints. Anything else is treated as all.
+SHOP_HINT_ALL = "all"
+SHOP_HINT_NEXT = "next"
+
+_CHECKS_BY_ID = {check.location_id: check for check in LOCATION_CHECKS}
+
+
+def _shop_sequence(location_ids: tuple[int, ...]) -> tuple[LocationCheck, ...]:
+    return tuple(_CHECKS_BY_ID[location_id] for location_id in location_ids)
+
+
+# Offer order. The first clear purchase bit is the shelf or trade on offer.
+# Lurvy's third Item #5 restocks, and the armor repair is a different trigger.
+SHOP_CHECKS: dict[int, tuple[LocationCheck, ...]] = {
+    MAP_LURVY_SHOP: _shop_sequence((266, 267)),
+    MAP_NAOMI_SHOP: _shop_sequence((273,)),
+    MAP_MERRICK_SHOP: _shop_sequence((254, 255, 256, 257, 258, 259, 260, 261)),
+}
+
+
+def shop_hint_locations(
+    loaded_map: int,
+    mode: object,
+    flag_bytes: bytes,
+    origin: int,
+    skip: set[int] | frozenset[int] = frozenset(),
+) -> list[int]:
+    """Location ids to scout for this shop visit.
+
+    A set purchase bit has already been bought. ``skip`` is the server's
+    checked set, so a found check is not scouted again. ``all`` returns every
+    remaining check in offer order. ``next`` returns the first remaining one.
+    A flag byte outside ``flag_bytes`` returns nothing.
+    """
+    sequence = SHOP_CHECKS.get(loaded_map)
+    if sequence is None:
+        return []
+    # A missing or unknown slot value reports every remaining check.
+    report_all = mode != SHOP_HINT_NEXT
+    offered: list[int] = []
+    for check in sequence:
+        index = check.byte_index - origin
+        if index < 0 or index >= len(flag_bytes):
+            return []
+        if flag_bytes[index] & check.mask:
+            continue
+        if check.location_id in skip:
+            if report_all:
+                continue
+            return []
+        if not report_all:
+            return [check.location_id]
+        offered.append(check.location_id)
+    return offered

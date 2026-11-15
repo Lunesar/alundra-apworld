@@ -2,9 +2,10 @@
 
 Archipelago ships the Lua connector (`data/lua/connector_bizhawk_generic.lua`).
 This module is the handler that connector talks to. It claims a PlayStation
-image, logs in to a room, reports locations listed in ``checks.py``, grants
-an item the server sends from another game, and sends the goal when the
-ending is requested.
+image, logs in to a room, reports locations listed in ``checks.py``, scouts
+the shop checks named there when you enter Naomi's, Lurvy's, or Merrick's,
+grants an item the server sends from another game, and sends the goal when
+the ending is requested.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from .checks import (
     flag_read,
     game_beaten,
     names_for,
+    shop_hint_locations,
 )
 from .placement import apworld_version, pinned_randomizer_version
 from .receive import READS, Hold, checks_ready, hold_message, parse_play_state, pending_ap_id, plan
@@ -68,6 +70,10 @@ class AlundraClient(BizHawkClient):
         # Locations already written to the log for this connection. The server
         # still receives a repeat until it drops the id from missing_locations.
         self._reported: set[int] = set()
+        # Shop checks already scouted for this connection. A repeat would
+        # broadcast the hint again only when the first packet never landed,
+        # so a new login clears this and the next shop visit sends it.
+        self._shop_hinted: set[int] = set()
         # Previous watch's play state. A grant waits until two watches agree,
         # so a one-frame change during a load is not applied.
         self._stable = None
@@ -149,7 +155,7 @@ class AlundraClient(BizHawkClient):
         ctx.auth = self._slot.player
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        """Report checked locations, grant one queued remote item, and send the goal."""
+        """Report checks, scout a shop, grant one remote item, and send the goal."""
         received = list(ctx.items_received)
         watching = bool(ctx.missing_locations & WATCHED_LOCATION_IDS)
         # The ending word is not a location. Keep reading it after the last chest.
@@ -193,6 +199,7 @@ class AlundraClient(BizHawkClient):
             if unreported:
                 self._reported.update(unreported)
                 logger.info("Checked %s.", ", ".join(names_for(unreported)))
+            await self._hint_shops(ctx, flag_bytes, offset - EVENT_FLAGS, play_bytes)
         if received:
             await self._receive(ctx, play_bytes, received)
 
@@ -209,6 +216,46 @@ class AlundraClient(BizHawkClient):
             return
         ctx.finished_game = True
         logger.info("Goal completed.")
+
+    async def _hint_shops(
+        self,
+        ctx: "BizHawkClientContext",
+        flag_bytes: bytes,
+        origin: int,
+        play_bytes: list[bytes],
+    ) -> None:
+        """Scout the checks this shop still has.
+
+        ``create_as_hint`` 2 records the hint and does not spend hint points.
+        The server drops a repeat of a hint it already stored. This set stops
+        a second watch in the same visit from sending the packet again.
+        """
+        if not _can_send(ctx):
+            return
+        slot_data = ctx.slot_data if isinstance(ctx.slot_data, dict) else {}
+        locations = shop_hint_locations(
+            parse_play_state(play_bytes).loaded_map,
+            slot_data.get("shop_hints"),
+            flag_bytes,
+            origin,
+            skip=ctx.checked_locations,
+        )
+        pending = [
+            location_id
+            for location_id in locations
+            if location_id not in self._shop_hinted and location_id in ctx.missing_locations
+        ]
+        if not pending:
+            return
+        await ctx.send_msgs([{
+            "cmd": "LocationScouts",
+            "locations": pending,
+            "create_as_hint": 2,
+        }])
+        if not _can_send(ctx):
+            return
+        self._shop_hinted.update(pending)
+        logger.info("Hinted %s.", ", ".join(names_for(set(pending))))
 
     async def _receive(self, ctx: "BizHawkClientContext", read_bytes: list[bytes], received: list) -> None:
         """Grant the item at the saved count when this watch matches the last one.
@@ -280,6 +327,7 @@ class AlundraClient(BizHawkClient):
         # A new room has its own missing list and its own received items.
         # The saved count still says what this file has already been granted.
         self._reported.clear()
+        self._shop_hinted.clear()
         self._stable = None
         self._holds.clear()
         logger.info("Logged in as %s.", ctx.auth)

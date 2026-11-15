@@ -60,4 +60,4 @@ Archipelago includes the Lua connector at `data/lua/connector_bizhawk_generic.lu
 
 The client reads the slot name from the disc. The log says `Logged in as <slot name>.` when the room accepts it. A vanilla disc, or a disc patched by a different release, never starts the handler. A disc patched for a different seed disconnects after login.
 
-Once Alundra has control, the client sends opened chests, one-time shop purchases, and completed Merrick trades. An item found for you in another game is granted then. A full stack of a healing item is paid out as gilder. When the ending starts, the client sends the goal.
+Once Alundra has control, the client sends opened chests, hints, one-time shop purchases, and completed Merrick trades. An item found for you in another game is granted then. A full stack of a healing item is paid out as gilder. When the ending starts, the client sends the goal.

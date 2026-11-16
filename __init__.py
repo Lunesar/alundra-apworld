@@ -133,6 +133,7 @@ class AlundraWebWorld(WebWorld):
             "allow_spoiler_log": True,
             "restocking_shop_items": "full_variety",
             "shop_hints": "all",
+            "hint_lurvy_repair": True,
             "start_inventory": {
                 "Dagger": 1,
                 "Cloth Armor": 1,
@@ -396,6 +397,7 @@ class AlundraWorld(World):
             "skip_last_dungeon": self._settings.skip_last_dungeon,
             "item_id_base": ITEM_ID_BASE,
             "shop_hints": self.options.shop_hints.current_key,
+            "hint_lurvy_repair": bool(self.options.hint_lurvy_repair.value),
         }
 
     def write_spoiler(self, spoiler_handle) -> None:

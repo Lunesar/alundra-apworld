@@ -22,7 +22,7 @@ Archipelago leaves the following out of the check list. Each one still receives 
 
 NPC hints are written into the dialogue when the disc is patched. Those lines are not sent to the room.
 
-Entering Naomi's shop, Lurvy's shop, or Merrick's shop reports that shop's checks. Shop Hints chooses how many. All, the default, reports every check the shop still has: Naomi's Item #4, Lurvy's Item #5 and the shelf that replaces it, and Merrick's eight Gilded Falcon trades. Next reports the one on offer. That is Naomi's Item #4, Lurvy's Item #5 until it is bought and then its replacement, or Merrick's lowest remaining trade. Shelves that restock are not checks, and Lurvy's armor repair is not reported from the doorway. A check you have already found is not reported again. This does not spend hint points.
+Entering Naomi's shop, Lurvy's shop, or Merrick's shop reports that shop's checks. Shop Hints chooses how many. All, the default, reports every check the shop still has: Naomi's Item #4, Lurvy's Item #5 and the shelf that replaces it, and Merrick's eight Gilded Falcon trades. Next reports the one on offer. That is Naomi's Item #4, Lurvy's Item #5 until it is bought and then its replacement, or Merrick's lowest remaining trade. Shelves that restock are not checks, and Lurvy's armor repair is not reported from the doorway. Jumping down his chimney reports that repair. Hint Lurvy's Repair turns the chimney report off. Handing over the Broken Armor is still the check. A check you have already found is not reported again. This does not spend hint points.
 
 Another player's item is shown as "player - item". The player name is kept to 16 printable ASCII characters and the item name to 28, so the line fits on the disc. The name you log in with is the full slot name.
 

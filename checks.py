@@ -147,7 +147,7 @@ def _shop_sequence(location_ids: tuple[int, ...]) -> tuple[LocationCheck, ...]:
 
 
 # Offer order. The first clear purchase bit is the shelf or trade on offer.
-# Lurvy's third Item #5 restocks, and the armor repair is a different trigger.
+# Lurvy's third Item #5 restocks. The armor repair is LURVY_SECRET, below.
 SHOP_CHECKS: dict[int, tuple[LocationCheck, ...]] = {
     MAP_LURVY_SHOP: _shop_sequence((266, 267)),
     MAP_NAOMI_SHOP: _shop_sequence((273,)),
@@ -189,3 +189,44 @@ def shop_hint_locations(
             return [check.location_id]
         offered.append(check.location_id)
     return offered
+
+
+# Map 398 script C[2]. The chimney lands on tile (6, 12) at z=4. The first
+# landing sets this bit. Flag(0xD403, 7), bit 7 of MainRAM 0x801DD403.
+# New game sets bit 6 of that byte and leaves this bit clear.
+LURVY_SECRET = 0x067F
+# Lurvy's Shop: Item obtained after repairing Broken Armor.
+LURVY_REPAIR_ID = 269
+
+
+def _flag_is_set(event_code: int, flag_bytes: bytes, origin: int) -> bool | None:
+    index = (event_code >> 3) - origin
+    if index < 0 or index >= len(flag_bytes):
+        return None
+    return bool(flag_bytes[index] & (1 << (event_code & 7)))
+
+
+def lurvy_repair_hints_enabled(slot_data: dict) -> bool:
+    """True unless the repair hint is explicitly off. A missing key is on."""
+    value = slot_data.get("hint_lurvy_repair", True)
+    return value is not False and value != 0
+
+
+def lurvy_repair_hint_locations(
+    flag_bytes: bytes,
+    origin: int,
+    skip: set[int] | frozenset[int] = frozenset(),
+) -> list[int]:
+    """The repair location once the chimney secret is set and the repair is still open.
+
+    A set repair bit means the Broken Armor was already handed over. A flag
+    byte outside ``flag_bytes`` returns nothing.
+    """
+    repair = _CHECKS_BY_ID[LURVY_REPAIR_ID]
+    secret = _flag_is_set(LURVY_SECRET, flag_bytes, origin)
+    handed_over = _flag_is_set(repair.event_code, flag_bytes, origin)
+    if secret is None or handed_over is None:
+        return []
+    if not secret or handed_over or repair.location_id in skip:
+        return []
+    return [repair.location_id]

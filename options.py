@@ -1,7 +1,7 @@
 """Player options.
 
-Patch settings are written into the placement file. Shop Hints is sent to the
-client in slot data and does not change the disc.
+Patch settings are written into the placement file. Shop Hints and Hint
+Lurvy's Repair are sent to the client in slot data and do not change the disc.
 """
 
 from __future__ import annotations
@@ -193,6 +193,17 @@ class ShopHints(Choice):
     default = 0
 
 
+class HintLurvyRepair(Toggle):
+    """Report the repaired Ancient Armor when you learn Lurvy's secret.
+
+    Jumping down his chimney sets the secret. The room learns what that
+    repair gives. Handing over the Broken Armor is still the check. Off
+    leaves the chimney silent.
+    """
+    display_name = "Hint Lurvy's Repair"
+    default = True
+
+
 @dataclass
 class AlundraOptions(PerGameCommonOptions):
     progressive_items: ProgressiveItems
@@ -211,6 +222,7 @@ class AlundraOptions(PerGameCommonOptions):
     item_sources_without_progression: ItemSourcesWithoutProgression
     restocking_shop_items: RestockingShopItems
     shop_hints: ShopHints
+    hint_lurvy_repair: HintLurvyRepair
 
 
 option_groups = [
@@ -225,6 +237,7 @@ option_groups = [
     ]),
     OptionGroup("Client", [
         ShopHints,
+        HintLurvyRepair,
     ]),
     OptionGroup("Patch", [
         OriginalGameBalance,

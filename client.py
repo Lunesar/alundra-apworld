@@ -27,6 +27,8 @@ from .checks import (
     checked_locations,
     flag_read,
     game_beaten,
+    lurvy_repair_hint_locations,
+    lurvy_repair_hints_enabled,
     names_for,
     shop_hint_locations,
 )
@@ -240,6 +242,12 @@ class AlundraClient(BizHawkClient):
             origin,
             skip=ctx.checked_locations,
         )
+        if lurvy_repair_hints_enabled(slot_data):
+            locations.extend(lurvy_repair_hint_locations(
+                flag_bytes,
+                origin,
+                skip=ctx.checked_locations,
+            ))
         pending = [
             location_id
             for location_id in locations

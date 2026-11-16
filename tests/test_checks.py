@@ -34,6 +34,9 @@ from alundra.checks import (
     checked_locations,
     flag_read,
     game_beaten,
+    LURVY_SECRET,
+    lurvy_repair_hint_locations,
+    lurvy_repair_hints_enabled,
     names_for,
     shop_hint_locations,
 )
@@ -402,3 +405,34 @@ class ShopHintTests(unittest.TestCase):
             shop_hint_locations(MAP_LURVY_SHOP, SHOP_HINT_ALL, b"\x00", 0),
             [],
         )
+
+
+def _with_bit(buf: bytes, event_code: int, on: bool) -> bytes:
+    data = bytearray(buf)
+    index = event_code >> 3
+    mask = 1 << (event_code & 7)
+    if on:
+        data[index] |= mask
+    else:
+        data[index] &= ~mask & 0xFF
+    return bytes(data)
+
+
+class LurvyRepairHintTests(unittest.TestCase):
+    def test_the_chimney_secret_hints_the_repair(self) -> None:
+        clear = _purchase_flags(set())
+        self.assertEqual(lurvy_repair_hint_locations(clear, 0), [])
+        secret = _with_bit(clear, LURVY_SECRET, True)
+        self.assertEqual(lurvy_repair_hint_locations(secret, 0), [269])
+        handed = _purchase_flags({269})
+        handed = _with_bit(handed, LURVY_SECRET, True)
+        self.assertEqual(lurvy_repair_hint_locations(handed, 0), [])
+        self.assertEqual(lurvy_repair_hint_locations(secret, 0, skip={269}), [])
+        self.assertEqual(lurvy_repair_hint_locations(b"\x00", 0), [])
+
+    def test_a_missing_option_gives_the_hint(self) -> None:
+        self.assertTrue(lurvy_repair_hints_enabled({}))
+        self.assertTrue(lurvy_repair_hints_enabled({"hint_lurvy_repair": True}))
+        self.assertTrue(lurvy_repair_hints_enabled({"hint_lurvy_repair": 1}))
+        self.assertFalse(lurvy_repair_hints_enabled({"hint_lurvy_repair": False}))
+        self.assertFalse(lurvy_repair_hints_enabled({"hint_lurvy_repair": 0}))

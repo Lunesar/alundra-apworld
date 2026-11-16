@@ -22,7 +22,7 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
 - [x] Report a shop check when the player enters Naomi's, Lurvy's, or Merrick's.
 
-  Shop Hints is `all` or `next`, default `all`, and `fill_slot_data` sends it as `shop_hints`. A ready watch on map 398, 258, or 134 sends `LocationScouts` with `create_as_hint` 2 for the checks that shop still has. `all` sends every remaining one. `next` sends the first whose purchase bit is clear. Restocking shelves have no location id. The repaired Ancient Armor is not included. Its trigger is the chimney secret bit, which is not in the address map yet.
+  Shop Hints is `all` or `next`, default `all`, and `fill_slot_data` sends it as `shop_hints`. A ready watch on map 398, 258, or 134 sends `LocationScouts` with `create_as_hint` 2 for the checks that shop still has. `all` sends every remaining one. `next` sends the first whose purchase bit is clear. Restocking shelves have no location id. The repaired Ancient Armor is separate. Hint Lurvy's Repair, default on, scouts id 269 when chimney bit `0x067F` is set and `0x0455` is still clear.
 
 - [ ] Report a location hint when the player reads one in the game.
 

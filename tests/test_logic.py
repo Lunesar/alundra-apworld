@@ -24,6 +24,7 @@ sys.modules["alundra"] = _package
 from alundra.data import GAME_DATA, REQUIRED_STARTING_ITEMS
 from alundra.logic import (
     LogicGraph,
+    LogicError,
     LogicSettings,
     _slot_groups,
     build_graph,
@@ -31,6 +32,7 @@ from alundra.logic import (
     convert_requirement,
     explore,
     full_inventory,
+    search_world,
 )
 
 
@@ -245,6 +247,87 @@ class ProgressiveTorlaTest(unittest.TestCase):
         self.assertIn("torla_mountain", reached)
         self.assertNotIn("torla_mountain_behind_charm_boots", reached)
         self.assertNotIn("torla_mountain_behind_spring", reached)
+
+
+# Source 1 is the chest in Lutas's house, on the spawn node. The Long Boots
+# gate is overworld_d4, which the spawn can reach with no other items.
+_LUTAS_CHEST = 1
+_LONG_BOOTS_NODE = "overworld_d4_behind_long_boots"
+_JESS_CHEST_NODE = "inoa_jess_chest"
+
+
+class WorldSearchTests(unittest.TestCase):
+    def test_starting_inventory_opens_its_gate(self) -> None:
+        graph = build_graph(GAME_DATA, LogicSettings(progressive_items=False))
+        closed = search_world(graph, GAME_DATA, {}, REQUIRED_STARTING_ITEMS)
+        self.assertIn("inoa", closed.nodes)
+        self.assertNotIn(_LONG_BOOTS_NODE, closed.nodes)
+        self.assertEqual(closed.count("Dagger"), 1)
+
+        opened = search_world(
+            graph, GAME_DATA, {}, (*REQUIRED_STARTING_ITEMS, "Long Boots"),
+        )
+        self.assertTrue(opened.reached(_LONG_BOOTS_NODE))
+
+    def test_a_reachable_chest_is_collected(self) -> None:
+        graph = build_graph(GAME_DATA, LogicSettings(progressive_items=False))
+        # Jess's blue chest is behind a Small Key. The key has to be in a
+        # chest the walk can already reach.
+        found = search_world(
+            graph, GAME_DATA, {_LUTAS_CHEST: "Small Key"}, REQUIRED_STARTING_ITEMS,
+        )
+        self.assertTrue(found.reached(_JESS_CHEST_NODE))
+        self.assertEqual(found.count("Small Key"), 1)
+
+        behind_the_door = search_world(graph, GAME_DATA, {2: "Small Key"}, REQUIRED_STARTING_ITEMS)
+        self.assertFalse(behind_the_door.reached(_JESS_CHEST_NODE))
+        self.assertEqual(behind_the_door.count("Small Key"), 0)
+
+    def test_a_forbidden_node_or_item_stays_in_the_chest(self) -> None:
+        graph = build_graph(GAME_DATA, LogicSettings(progressive_items=False))
+        placements = {_LUTAS_CHEST: "Small Key"}
+        by_node = search_world(
+            graph, GAME_DATA, placements, REQUIRED_STARTING_ITEMS, forbid_nodes=("inoa",),
+        )
+        by_item = search_world(
+            graph, GAME_DATA, placements, REQUIRED_STARTING_ITEMS, forbid_items=("Small Key",),
+        )
+        self.assertFalse(by_node.reached(_JESS_CHEST_NODE))
+        self.assertFalse(by_item.reached(_JESS_CHEST_NODE))
+        # Forbidding the pickup leaves the copy Alundra started with.
+        owned = search_world(
+            graph, GAME_DATA, placements, ("Long Boots",), forbid_items=("Long Boots",),
+        )
+        self.assertTrue(owned.reached(_LONG_BOOTS_NODE))
+        self.assertEqual(owned.count("Long Boots"), 1)
+
+    def test_another_worlds_item_is_not_collected(self) -> None:
+        graph = build_graph(GAME_DATA, LogicSettings(progressive_items=False))
+        missed = search_world(graph, GAME_DATA, {}, REQUIRED_STARTING_ITEMS)
+        self.assertFalse(missed.reached(_JESS_CHEST_NODE))
+
+    def test_one_boots_upgrade_stands_in_for_long_boots(self) -> None:
+        graph = build_graph(GAME_DATA, REPLACED)
+        closed = search_world(graph, GAME_DATA, {}, REQUIRED_STARTING_ITEMS)
+        self.assertFalse(closed.reached(_LONG_BOOTS_NODE))
+        opened = search_world(
+            graph, GAME_DATA, {_LUTAS_CHEST: "Boots upgrade"}, REQUIRED_STARTING_ITEMS,
+        )
+        self.assertTrue(opened.reached(_LONG_BOOTS_NODE))
+        self.assertEqual(opened.count("Boots upgrade"), 1)
+
+    def test_unknown_names_are_rejected(self) -> None:
+        graph = build_graph(GAME_DATA, LogicSettings(progressive_items=False))
+        with self.assertRaises(LogicError):
+            search_world(graph, GAME_DATA, {99999: "Small Key"})
+        with self.assertRaises(LogicError):
+            search_world(graph, GAME_DATA, {_LUTAS_CHEST: "Not An Item"})
+        with self.assertRaises(LogicError):
+            search_world(graph, GAME_DATA, {}, ("Not An Item",))
+        with self.assertRaises(LogicError):
+            search_world(graph, GAME_DATA, {}, forbid_nodes=("not_a_node",))
+        with self.assertRaises(LogicError):
+            search_world(graph, GAME_DATA, {}, forbid_items=("Not An Item",))
 
 
 if __name__ == "__main__":

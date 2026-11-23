@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from collections import Counter, defaultdict
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 
 from .data import (
@@ -23,6 +24,7 @@ from .data import (
     AlundraDataError,
     GameData,
     ItemRecord,
+    ItemSourceRecord,
     restocking_shop_sources,
 )
 
@@ -462,3 +464,155 @@ def full_inventory(graph: LogicGraph) -> Counter[str]:
 
 def reaches_end(graph: LogicGraph, inventory: Counter[str]) -> bool:
     return END_NODE in explore(graph, inventory)
+
+
+@dataclass(frozen=True)
+class WorldSearch:
+    """Nodes reached by one collecting walk, and the inventory that walk ended with."""
+
+    nodes: frozenset[str]
+    inventory: tuple[tuple[str, int], ...]
+
+    def reached(self, node_id: str) -> bool:
+        return node_id in self.nodes
+
+    def count(self, item_name: str) -> int:
+        for name, amount in self.inventory:
+            if name == item_name:
+                return amount
+        return 0
+
+
+def search_world(
+    graph: LogicGraph,
+    game_data: GameData,
+    placements: Mapping[int, str],
+    starting_inventory: Iterable[str] = (),
+    *,
+    forbid_nodes: Collection[str] = (),
+    forbid_items: Collection[str] = (),
+    start: str = SPAWN_NODE,
+) -> WorldSearch:
+    """Walk from ``start``, picking up Alundra items in reachable chests.
+
+    ``placements`` maps a source id to the Alundra item in that chest. A source
+    left out of the map is not collected, which is how another world's item is
+    skipped. ``forbid_nodes`` leaves every chest in those nodes where it is.
+    ``forbid_items`` does the same for every copy of those item names. Copies
+    already in ``starting_inventory`` stay owned. ``explore`` does not collect,
+    and this walk does.
+    """
+    # Checked once. A bad name would otherwise look like a closed gate.
+    _check_search_names(game_data, placements, starting_inventory, forbid_nodes, forbid_items)
+
+    owned = Counter(starting_inventory)
+    explored: set[str] = set()
+    pending = [start]
+    blocked: list[Edge] = []
+    outgoing: dict[str, list[Edge]] = defaultdict(list)
+    for edge in graph.edges:
+        outgoing[edge.origin].append(edge)
+    sources_by_node: dict[str, list[ItemSourceRecord]] = defaultdict(list)
+    for source in game_data.sources:
+        sources_by_node[source.node_id].append(source)
+    skipped_nodes = frozenset(forbid_nodes)
+    skipped_items = frozenset(forbid_items)
+
+    while True:
+        blocked = _expand(pending, blocked, explored, owned, outgoing)
+        pending = []
+        updated = _owned_items(
+            starting_inventory, explored, sources_by_node, placements, skipped_nodes, skipped_items,
+        )
+        if updated == owned:
+            break
+        owned = updated
+        still_blocked: list[Edge] = []
+        for edge in blocked:
+            if _satisfied(edge, owned, explored) and edge.destination not in explored:
+                pending.append(edge.destination)
+            elif not _satisfied(edge, owned, explored):
+                still_blocked.append(edge)
+        blocked = still_blocked
+        if not pending:
+            break
+
+    return WorldSearch(frozenset(explored), _inventory_pairs(owned))
+
+
+def _expand(
+    pending: list[str],
+    blocked: list[Edge],
+    explored: set[str],
+    owned: Counter[str],
+    outgoing: dict[str, list[Edge]],
+) -> list[Edge]:
+    # Same node-requirement pass as explore. A visited node can open the next
+    # edge without a new item, so the blocked list is retried until it settles.
+    while pending:
+        while pending:
+            node = pending.pop()
+            if node in explored:
+                continue
+            explored.add(node)
+            for edge in outgoing.get(node, ()):
+                if _satisfied(edge, owned, explored):
+                    if edge.destination not in explored:
+                        pending.append(edge.destination)
+                else:
+                    blocked.append(edge)
+        still_blocked: list[Edge] = []
+        for edge in blocked:
+            if _satisfied(edge, owned, explored) and edge.destination not in explored:
+                pending.append(edge.destination)
+            elif not _satisfied(edge, owned, explored):
+                still_blocked.append(edge)
+        blocked = still_blocked
+    return blocked
+
+
+def _owned_items(
+    starting_inventory: Iterable[str],
+    explored: set[str],
+    sources_by_node: dict[str, list[ItemSourceRecord]],
+    placements: Mapping[int, str],
+    skipped_nodes: frozenset[str],
+    skipped_items: frozenset[str],
+) -> Counter[str]:
+    owned = Counter(starting_inventory)
+    for node_id in explored:
+        if node_id in skipped_nodes:
+            continue
+        for source in sources_by_node.get(node_id, ()):
+            item_name = placements.get(source.id)
+            if item_name is None or item_name in skipped_items:
+                continue
+            owned[item_name] += 1
+    return owned
+
+
+def _inventory_pairs(counts: Counter[str]) -> tuple[tuple[str, int], ...]:
+    return tuple(sorted((name, amount) for name, amount in counts.items() if amount > 0))
+
+
+def _check_search_names(
+    game_data: GameData,
+    placements: Mapping[int, str],
+    starting_inventory: Iterable[str],
+    forbid_nodes: Collection[str],
+    forbid_items: Collection[str],
+) -> None:
+    for source_id, item_name in placements.items():
+        if source_id not in game_data.source_by_id:
+            raise LogicError(f"Placement names unknown item source {source_id}.")
+        if item_name not in game_data.item_by_name:
+            raise LogicError(f"Placement on source {source_id} names unknown item '{item_name}'.")
+    for item_name in starting_inventory:
+        if item_name not in game_data.item_by_name:
+            raise LogicError(f"Starting inventory names unknown item '{item_name}'.")
+    for node_id in forbid_nodes:
+        if node_id not in game_data.nodes:
+            raise LogicError(f"Forbidden node '{node_id}' does not exist.")
+    for item_name in forbid_items:
+        if item_name not in game_data.item_by_name:
+            raise LogicError(f"Forbidden item '{item_name}' does not exist.")

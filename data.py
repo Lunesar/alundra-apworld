@@ -1,6 +1,6 @@
 """Load the logic JSON shipped in this world's data directory.
 
-Those five files are copies of the Alundra randomizer's logic data. The two
+Those files are copies of the Alundra randomizer's logic data. The two
 repositories must not diverge. Edit the files in the randomizer, then copy
 them here. Do not edit the copies in this repository.
 
@@ -9,6 +9,7 @@ them here. Do not edit the copies in this repository.
     src/model/data/world_node.json   -> data/world_node.json
     src/model/data/world_path.json   -> data/world_path.json
     src/model/data/world_region.json -> data/world_region.json
+    src/model/data/hint_source.json  -> data/hint_source.json
 """
 
 from __future__ import annotations
@@ -199,6 +200,21 @@ class PathRecord:
 class RegionRecord:
     name: str
     node_ids: tuple[str, ...]
+    hint_name: str = ""
+    can_be_hinted_as_required: bool = False
+
+    @property
+    def hint_phrase(self) -> str:
+        # The randomizer uses the hint name, and the region name when that is empty.
+        return self.hint_name or self.name
+
+
+@dataclass(frozen=True)
+class HintSourceRecord:
+    id: str
+    name: str
+    node_id: str
+    text: str
 
 
 @dataclass(frozen=True)
@@ -212,6 +228,7 @@ class GameData:
     nodes: dict[str, NodeRecord]
     paths: tuple[PathRecord, ...]
     regions: tuple[RegionRecord, ...]
+    hint_sources: tuple[HintSourceRecord, ...]
 
 
 def visited_item_name(node_id: str) -> str:
@@ -305,8 +322,40 @@ def _parse_regions(regions_json) -> tuple[tuple[RegionRecord, ...], dict[str, st
             if node_id in node_regions:
                 raise AlundraDataError(f"Node '{node_id}' is in more than one region.")
             node_regions[node_id] = name
-        regions.append(RegionRecord(name=name, node_ids=node_ids))
+        hint_name = entry.get("hintName", "")
+        if not isinstance(hint_name, str):
+            raise AlundraDataError(f"Region '{name}' hintName must be a string.")
+        can_hint = entry.get("canBeHintedAsRequired", False)
+        if not isinstance(can_hint, bool):
+            raise AlundraDataError(f"Region '{name}' canBeHintedAsRequired must be a boolean.")
+        regions.append(RegionRecord(
+            name=name,
+            node_ids=node_ids,
+            hint_name=hint_name,
+            can_be_hinted_as_required=can_hint,
+        ))
     return tuple(regions), node_regions
+
+
+def _parse_hint_sources(sources_json, nodes: dict[str, NodeRecord]) -> tuple[HintSourceRecord, ...]:
+    if not isinstance(sources_json, dict):
+        raise AlundraDataError("hint_source.json must be an object keyed by speaker id.")
+    speakers: list[HintSourceRecord] = []
+    for speaker_id, entry in sources_json.items():
+        if not isinstance(entry, dict):
+            raise AlundraDataError(f"Hint source '{speaker_id}' must be an object.")
+        _reject_unknown("hint source", speaker_id, set(entry), {"name", "nodeId", "text"})
+        name = entry.get("name")
+        node_id = entry.get("nodeId")
+        text = entry.get("text")
+        if not isinstance(name, str) or not name:
+            raise AlundraDataError(f"Hint source '{speaker_id}' needs a name.")
+        if node_id not in nodes:
+            raise AlundraDataError(f"Hint source '{speaker_id}' is in unknown node '{node_id}'.")
+        if not isinstance(text, str):
+            raise AlundraDataError(f"Hint source '{speaker_id}' needs placeholder text.")
+        speakers.append(HintSourceRecord(id=speaker_id, name=name, node_id=node_id, text=text))
+    return tuple(speakers)
 
 
 def _parse_nodes(nodes_json, node_regions: dict[str, str]) -> dict[str, NodeRecord]:
@@ -446,6 +495,7 @@ def load_game_data() -> GameData:
         _load_json("item_source.json"), nodes, item_by_name,
     )
     paths = _parse_paths(_load_json("world_path.json"), nodes, item_by_name)
+    hint_sources = _parse_hint_sources(_load_json("hint_source.json"), nodes)
     _check_builtin_references(item_by_name, source_by_pretty_name, nodes)
     return GameData(
         items=items,
@@ -457,6 +507,7 @@ def load_game_data() -> GameData:
         nodes=nodes,
         paths=paths,
         regions=regions,
+        hint_sources=hint_sources,
     )
 
 

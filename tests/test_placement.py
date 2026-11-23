@@ -22,6 +22,7 @@ _package.__spec__.submodule_search_locations = [str(_world)]
 sys.modules["alundra"] = _package
 
 from alundra.data import GAME_DATA, ITEM_COUNT, REQUIRED_STARTING_ITEMS
+from alundra.hints import HintLocation, SpeakerHint
 from alundra.logic import LogicSettings
 from alundra.placement import (
     FORMAT_ALUNDRA,
@@ -31,6 +32,7 @@ from alundra.placement import (
     allows_outside_item,
     apworld_version,
     build_placement_document,
+    hint_search_placements,
     remote_shop_price,
     remote_shop_price_applies,
     remote_shop_price_for,
@@ -46,12 +48,13 @@ def _native_placements() -> dict[int, int]:
     }
 
 
-def _document(placements: dict, *, player: str | None = "YourName") -> dict:
+def _document(placements: dict, *, player: str | None = "YourName", hints=None) -> dict:
     return build_placement_document(
         LogicSettings(),
         placements,
         list(REQUIRED_STARTING_ITEMS),
         player=player,
+        hints=hints,
     )
 
 
@@ -287,6 +290,69 @@ class PlacementTests(unittest.TestCase):
         placements[273] = OutsidePlacement(player="Player", item="Key Item", flags=0b00001, price=False)
         with self.assertRaises(PlacementError):
             _document(placements)
+
+    def test_spoken_rows_record_one_check(self) -> None:
+        rows = (
+            SpeakerHint("jess", "Bomb can be found near Sanctuary", HintLocation(4)),
+            SpeakerHint(
+                "lars_crypt",
+                "Ruby Crest can be found in an unknown place",
+                HintLocation(4242, 2),
+            ),
+        )
+        document = _document(_native_placements(), hints=rows)
+        self.assertEqual(
+            document["hints"],
+            [
+                {
+                    "speaker": "jess",
+                    "text": "Bomb can be found near Sanctuary",
+                    "location": 4,
+                },
+                {
+                    "speaker": "lars_crypt",
+                    "text": "Ruby Crest can be found in an unknown place",
+                    "location": 4242,
+                    "player": 2,
+                },
+            ],
+        )
+        self.assertEqual(list(document)[-1], "hints")
+
+    def test_an_empty_roll_is_written_and_an_omitted_roll_is_not(self) -> None:
+        self.assertEqual(_document(_native_placements(), hints=()).get("hints"), [])
+        self.assertNotIn("hints", _document(_native_placements()))
+
+    def test_a_hint_row_must_name_one_real_speaker_and_check(self) -> None:
+        placements = _native_placements()
+        with self.assertRaises(PlacementError):
+            _document(placements, hints=(SpeakerHint("nope", "Bomb can be found near Sanctuary", HintLocation(4)),))
+        with self.assertRaises(PlacementError):
+            _document(placements, hints=(
+                SpeakerHint("jess", "Bomb can be found near Sanctuary", HintLocation(4)),
+                SpeakerHint("jess", "Bomb can be found near Sanctuary", HintLocation(1)),
+            ))
+        with self.assertRaises(PlacementError):
+            _document(placements, hints=(SpeakerHint("jess", "Bomb can be found near Sanctuary", HintLocation(262)),))
+        with self.assertRaises(PlacementError):
+            _document(placements, hints=(SpeakerHint("jess", "", HintLocation(4)),))
+        with self.assertRaises(PlacementError):
+            _document(placements, hints=(SpeakerHint("jess", "Bomb\ncan be found", HintLocation(4)),))
+        with self.assertRaises(PlacementError):
+            _document(placements, hints=(SpeakerHint("jess", "Bomb can be found near Sanctuary", HintLocation(4, True)),))
+
+    def test_hint_search_keeps_alundra_names_and_remote_progression(self) -> None:
+        placements = _native_placements()
+        native = placements[2]
+        placements[1] = OutsidePlacement(player="Bea", item="Sword", flags=0b00001)
+        placements[4] = OutsidePlacement(player="Bea", item="Potion", flags=0)
+        placements[5] = OutsidePlacement(player="Bea", item="Bow", flags=0b00011)
+        names, progression = hint_search_placements(placements)
+        self.assertNotIn(1, names)
+        self.assertNotIn(4, names)
+        self.assertNotIn(5, names)
+        self.assertEqual(progression, (1, 5))
+        self.assertEqual(names[2], GAME_DATA.item_by_id[native].name)
 
     def test_non_progression_check_refuses_progression(self) -> None:
         self.assertFalse(allows_outside_item(block_progression=True, progression=True))

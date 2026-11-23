@@ -20,6 +20,14 @@ only the in-game ids. This slot's own items stay those ids.
 
 The randomizer's own --placement-out writes the Alundra format ("format": 1).
 That file is only in-game item ids and does not carry apworldVersion or player.
+
+Spoken speaker lines are a "hints" array. Each row is one speaker, the full
+sentence, and the one check that sentence registers. A local check is this
+world's location id. An unknown-place line also names the other player's slot
+and that slot's location id. No other off-world destination is stored. An
+empty array means the roll spoke nothing. A file with no "hints" key is older,
+and the patcher rolls the lines itself. This world always writes the key.
+The reader keeps the rows. It does not write them yet.
 """
 
 from __future__ import annotations
@@ -27,11 +35,13 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
-from .data import GAME_DATA, ITEM_COUNT, REQUIRED_STARTING_ITEMS, GameData
+from .data import GAME_DATA, ITEM_COUNT, REQUIRED_STARTING_ITEMS, GameData, location_sources
+from .hints import SpeakerHint
 from .logic import LogicSettings, preplaced_crest_names
 
 
@@ -130,6 +140,12 @@ def remote_shop_price(classification: str, sphere: int) -> int:
     )
 
 
+# A hint location id is written as a JSON number. The reader stores it in a
+# signed 64-bit integer. A slot number fits in a signed 32-bit integer.
+_HINT_LOCATION_MAX = 2**63 - 1
+_HINT_PLAYER_MAX = 2**31 - 1
+
+
 def _remote_classification(flags: int) -> str:
     if isinstance(flags, bool) or not isinstance(flags, int) or flags < 0:
         raise PlacementError(f"Remote item classification {flags!r} is not a flag value.")
@@ -141,6 +157,15 @@ def _remote_classification(flags: int) -> str:
     if flags & _USEFUL:
         return "useful"
     return "filler"
+
+
+def is_remote_progression(placed: OutsidePlacement) -> bool:
+    """Another world's item counts as progression only when that flag is set.
+
+    Useful, filler, and trap do not make an area line say something useful.
+    Progression outranks the other flags when more than one is set.
+    """
+    return _remote_classification(placed.flags) == "progression"
 
 
 def remote_shop_price_for(flags: int, sphere: int) -> int:
@@ -305,6 +330,88 @@ def _check_distribution_counts(counted: Counter[str]) -> None:
         )
 
 
+def hint_search_placements(
+    placements: Mapping[int, int | OutsidePlacement],
+    game_data: GameData = GAME_DATA,
+) -> tuple[dict[int, str], tuple[int, ...]]:
+    """Alundra item names by source, and sources holding a remote progression item.
+
+    A remote check is left out of the name map. The search treats a missing
+    source as nothing to pick up. Only a remote progression item is returned
+    beside that map.
+    """
+    names: dict[int, str] = {}
+    progression: list[int] = []
+    for source_id, placed in placements.items():
+        if isinstance(placed, OutsidePlacement):
+            if is_remote_progression(placed):
+                progression.append(source_id)
+            continue
+        if isinstance(placed, bool) or not isinstance(placed, int):
+            raise PlacementError(f"Location {source_id} has item id {placed}, which is not a game item.")
+        record = game_data.item_by_id.get(placed)
+        if record is None:
+            raise PlacementError(f"Location {source_id} has item id {placed}, which is not a game item.")
+        names[source_id] = record.name
+    return names, tuple(sorted(progression))
+
+
+def _hint_sentence(speaker: str, text: object) -> str:
+    if (
+        not isinstance(text, str)
+        or not text
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in text)
+    ):
+        raise PlacementError(f"Hint for '{speaker}' needs a sentence without control characters.")
+    return text
+
+
+def _hint_location_id(speaker: str, location: object) -> int:
+    if isinstance(location, bool) or not isinstance(location, int) or not 0 <= location <= _HINT_LOCATION_MAX:
+        raise PlacementError(f"Hint for '{speaker}' needs an integer location id.")
+    return location
+
+
+def _encode_hint(row: SpeakerHint, checks: set[int]) -> dict[str, str | int]:
+    speaker = row.speaker
+    encoded: dict[str, str | int] = {
+        "speaker": speaker,
+        "text": _hint_sentence(speaker, row.text),
+        "location": _hint_location_id(speaker, row.check.location),
+    }
+    player = row.check.player
+    if player is None:
+        if encoded["location"] not in checks:
+            raise PlacementError(
+                f"Hint for '{speaker}' names location {encoded['location']}, which is not a check."
+            )
+        return encoded
+    if isinstance(player, bool) or not isinstance(player, int) or not 1 <= player <= _HINT_PLAYER_MAX:
+        raise PlacementError(f"Hint for '{speaker}' needs the other player's slot.")
+    encoded["player"] = player
+    return encoded
+
+
+def _encode_hints(rows: Sequence[SpeakerHint], game_data: GameData) -> list[dict[str, str | int]]:
+    # A string is a sequence. It is not a list of rows.
+    if isinstance(rows, (str, bytes)):
+        raise PlacementError("Speaker hints must be a list of rows.")
+    checks = {source.id for source in location_sources(game_data)}
+    known = {speaker.id for speaker in game_data.hint_sources}
+    seen: set[str] = set()
+    encoded: list[dict[str, str | int]] = []
+    for row in rows:
+        if not isinstance(row, SpeakerHint):
+            raise PlacementError("A speaker hint row must name a speaker, a sentence, and one check.")
+        if row.speaker not in known:
+            raise PlacementError(f"Hint speaker '{row.speaker}' is not a hint source.")
+        if row.speaker in seen:
+            raise PlacementError(f"Speaker '{row.speaker}' has more than one hint row.")
+        seen.add(row.speaker)
+        encoded.append(_encode_hint(row, checks))
+    return encoded
+
+
 def _starting_inventory(names: list[str], game_data: GameData) -> list[str]:
     ordered: list[str] = []
     seen: set[str] = set()
@@ -323,6 +430,13 @@ def _check_required_starting_items(inventory: list[str]) -> None:
     for name in REQUIRED_STARTING_ITEMS:
         if name not in inventory:
             raise PlacementError(f"Starting inventory is missing {name}.")
+
+
+def recorded_starting_inventory(names: list[str], game_data: GameData = GAME_DATA) -> list[str]:
+    """The starting inventory the placement file records, required items included."""
+    inventory = _starting_inventory(names, game_data)
+    _check_required_starting_items(inventory)
+    return inventory
 
 
 def _game_settings(settings: LogicSettings) -> dict:
@@ -362,20 +476,24 @@ def build_placement_document(
     game_data: GameData = GAME_DATA,
     *,
     player: str | None = None,
+    hints: Sequence[SpeakerHint] | None = None,
 ) -> dict:
     """Return the Multiworld placement document --placement-in accepts.
 
     The file always records apworldVersion and this slot's player beside seed,
     so a disc patched from it can log in. A file of only in-game item ids is
     still that format. The randomizer writes the Alundra format itself.
+
+    ``hints`` is the spoken rows. None leaves the key off, which is an older
+    file. An empty sequence writes an empty array: the roll ran, and no
+    speaker had a line.
     """
     _check_seed(settings.seed)
     _check_location_ids(placements, game_data)
     encoded, counted = _encode_placements(placements, game_data)
     _check_distribution_counts(counted)
-    inventory = _starting_inventory(starting_inventory, game_data)
-    _check_required_starting_items(inventory)
-    return {
+    inventory = recorded_starting_inventory(starting_inventory, game_data)
+    document = {
         "format": FORMAT_MULTIWORLD,
         "apworldVersion": apworld_version(),
         "player": _check_slot_player(player),
@@ -384,6 +502,9 @@ def build_placement_document(
         "randomizerSettings": _randomizer_settings(settings, inventory, counted),
         "placements": encoded,
     }
+    if hints is not None:
+        document["hints"] = _encode_hints(hints, game_data)
+    return document
 
 
 def write_placement(path: Path, document: dict) -> None:

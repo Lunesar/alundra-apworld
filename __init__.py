@@ -10,7 +10,8 @@ Another slot's item may be placed on an Alundra check. The placement file
 records that item as an object. A one-time shop shelf also records the gilder
 it charges. This slot's own items stay in-game item ids. The file is always
 the Multiworld format, recording this slot's player name, the apworld
-version, and the seed.
+version, and the seed. It also records the spoken speaker hints: one speaker,
+the sentence, and the one check that sentence registers.
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ from .data import (
     visited_item_name,
 )
 from .items import AlundraItem, AlundraLocation, classification_for
+from .hints import HintLocation, offworld_hint_copies, roll_hints
 from .logic import (
     END_NODE,
     LogicError,
@@ -69,6 +71,8 @@ from .placement import (
     remote_shop_price_applies,
     remote_shop_price_for,
     build_placement_document,
+    hint_search_placements,
+    recorded_starting_inventory,
     write_placement,
 )
 
@@ -365,12 +369,31 @@ class AlundraWorld(World):
                 )
             placements[source_id] = self._outside_placement(item, source, spheres.get(source_id))
 
+        # Hint Generation
+        inventory = recorded_starting_inventory(self._precollected_names())
+        local_names, remote_progression = hint_search_placements(placements)
+        try:
+            hint_rows = roll_hints(
+                self.logic_graph,
+                GAME_DATA,
+                self.random,
+                local_names,
+                starting_inventory=inventory,
+                remote_progression=remote_progression,
+                offworld=self._offworld_hint_copies(),
+                progressive_items=self._settings.progressive_items,
+                split_boots_effects=self._settings.split_boots_effects,
+            )
+        except LogicError as error:
+            raise RuntimeError(str(error)) from error
+
         # Multiworld format
         document = build_placement_document(
             self._settings,
             placements,
             self._precollected_names(),
             player=self.multiworld.get_player_name(self.player),
+            hints=hint_rows,
         )
         # Manifest "player" is this slot's number. The document's "player" is the login name.
         with tempfile.TemporaryDirectory() as directory:
@@ -592,6 +615,22 @@ class AlundraWorld(World):
             flags=flags,
             price=price,
         )
+
+    def _offworld_hint_copies(self) -> dict[str, tuple[HintLocation, ...]]:
+        # An Alundra item that left this world. A location with no id, such as
+        # an event, cannot be registered, so it is not a copy the line can name.
+        copies: list[tuple[str, int, int]] = []
+        for location in self.multiworld.get_locations():
+            if location.player == self.player:
+                continue
+            item = location.item
+            if item is None or item.player != self.player or not isinstance(item, AlundraItem):
+                continue
+            address = location.address
+            if address is None:
+                continue
+            copies.append((item.name, address, location.player))
+        return offworld_hint_copies(copies)
 
     def _precollected_counts(self) -> Counter[str]:
         counts: Counter[str] = Counter()

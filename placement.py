@@ -4,7 +4,7 @@ This world always writes the Multiworld format. That file names this
 slot, the seed, and version information which the randomizer embeds as a
 slot block that the client uses to log in:
 
-    "format": 2, "apworldVersion": "0.2.3", "player": "YourName", "seed": 1
+    "format": 2, "apworldVersion": "0.2.6", "player": "YourName", "seed": 1
 
 apworldVersion is world_version from archipelago.json. player is this slot's
 login name, kept whole. It is not the shortened player on a remote placement.
@@ -27,7 +27,8 @@ world's location id. An unknown-place line also names the other player's slot
 and that slot's location id. No other off-world destination is stored. An
 empty array means the roll spoke nothing. A file with no "hints" key is older,
 and the patcher rolls the lines itself. This world always writes the key.
-The reader keeps the rows. It does not write them yet.
+When the key is present, the patcher writes those sentences onto the
+speakers and does not roll again. A speaker with no row keeps the placeholder.
 """
 
 from __future__ import annotations

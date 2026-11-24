@@ -35,10 +35,16 @@ from alundra.checks import (
     flag_read,
     game_beaten,
     LURVY_SECRET,
+    MAP_JESS_HOUSE,
+    SPEAKER_LINE_FLAGS,
+    jess_talk_step,
     lurvy_repair_hint_locations,
     lurvy_repair_hints_enabled,
     names_for,
+    pending_jess_hint,
+    pending_speaker_hints,
     shop_hint_locations,
+    speaker_hints_outstanding,
 )
 from alundra.data import GAME_DATA, LOCATION_NAME_TO_ID
 from alundra.receive import REQUESTED_MAP
@@ -436,3 +442,151 @@ class LurvyRepairHintTests(unittest.TestCase):
         self.assertTrue(lurvy_repair_hints_enabled({"hint_lurvy_repair": 1}))
         self.assertFalse(lurvy_repair_hints_enabled({"hint_lurvy_repair": False}))
         self.assertFalse(lurvy_repair_hints_enabled({"hint_lurvy_repair": 0}))
+
+
+class SpeakerHintSendTests(unittest.TestCase):
+    def test_every_speaker_except_jess_has_a_line_bit(self) -> None:
+        speakers = {source.id for source in GAME_DATA.hint_sources}
+        self.assertEqual(set(SPEAKER_LINE_FLAGS) | {"jess"}, speakers)
+        self.assertNotIn("jess", SPEAKER_LINE_FLAGS)
+
+    def test_line_bits_are_inside_the_flag_read(self) -> None:
+        read = flag_read()
+        self.assertIsNotNone(read)
+        assert read is not None
+        origin, length = read
+        start = origin - EVENT_FLAGS
+        for speaker, code in SPEAKER_LINE_FLAGS.items():
+            self.assertLess(code, 2048, speaker)
+            index = (code >> 3) - start
+            self.assertGreaterEqual(index, 0, speaker)
+            self.assertLess(index, length, speaker)
+
+    def test_a_heard_local_line_names_its_check(self) -> None:
+        clear = _purchase_flags(set())
+        rows = [{"speaker": "lars_crypt", "location": 4}]
+        self.assertEqual(pending_speaker_hints(rows, clear, 0, {4}, set()).sends, ())
+        heard = _with_bit(clear, SPEAKER_LINE_FLAGS["lars_crypt"], True)
+        plan = pending_speaker_hints(rows, heard, 0, {4}, set())
+        self.assertEqual([(send.speaker, send.location, send.player) for send in plan.sends], [("lars_crypt", 4, None)])
+        self.assertEqual(plan.quiet, ())
+        # The same connection does not send it again.
+        again = pending_speaker_hints(rows, heard, 0, {4}, {"lars_crypt"})
+        self.assertEqual(again.sends, ())
+        self.assertEqual(again.quiet, ())
+
+    def test_a_found_local_check_sends_nothing(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), SPEAKER_LINE_FLAGS["coal_mine"], True)
+        rows = [{"speaker": "coal_mine", "location": 12}]
+        plan = pending_speaker_hints(rows, heard, 0, set(), set())
+        self.assertEqual(plan.sends, ())
+        self.assertEqual(plan.quiet, ("coal_mine",))
+
+    def test_an_unknown_place_is_not_gated_on_this_slot(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), SPEAKER_LINE_FLAGS["nava_keep"], True)
+        rows = [{"speaker": "nava_keep", "location": 4242, "player": 2}]
+        plan = pending_speaker_hints(rows, heard, 0, set(), set())
+        self.assertEqual(
+            [(send.speaker, send.location, send.player) for send in plan.sends],
+            [("nava_keep", 4242, 2)],
+        )
+        self.assertEqual(plan.quiet, ())
+
+    def test_jess_and_bad_rows_are_skipped(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), SPEAKER_LINE_FLAGS["lars_crypt"], True)
+        rows = [
+            {"speaker": "jess", "location": 4},
+            {"speaker": "nope", "location": 4},
+            {"speaker": "lars_crypt", "location": True},
+            {"speaker": "lars_crypt", "location": 4, "player": 0},
+            {"speaker": "lars_crypt", "location": 4, "player": True},
+            "lars_crypt",
+            {"speaker": "lars_crypt", "location": 4},
+            {"speaker": "lars_crypt", "location": 9},
+        ]
+        plan = pending_speaker_hints(rows, heard, 0, {4, 9}, set())
+        self.assertEqual([send.location for send in plan.sends], [4])
+        self.assertFalse(speaker_hints_outstanding([{"speaker": "jess", "location": 4}], set()))
+        self.assertFalse(speaker_hints_outstanding(None, set()))
+        self.assertTrue(speaker_hints_outstanding(rows, set()))
+        self.assertFalse(speaker_hints_outstanding(rows, {"lars_crypt"}))
+
+    def test_a_short_flag_read_does_not_forget_the_line(self) -> None:
+        rows = [{"speaker": "coastal_cave", "location": 8}]
+        plan = pending_speaker_hints(rows, b"\x00", 0, {8}, set())
+        self.assertEqual(plan.sends, ())
+        self.assertEqual(plan.quiet, ())
+        self.assertTrue(speaker_hints_outstanding(rows, set()))
+
+
+class JessTalkTests(unittest.TestCase):
+    def test_an_open_jess_row_names_its_check(self) -> None:
+        self.assertEqual(MAP_JESS_HOUSE, 260)
+        rows = [{"speaker": "jess", "location": 4}]
+        plan = pending_jess_hint(rows, {4}, set())
+        self.assertEqual(
+            [(send.speaker, send.location, send.player) for send in plan.sends],
+            [("jess", 4, None)],
+        )
+        self.assertEqual(plan.quiet, ())
+        # His row still does not keep the flag read alive.
+        self.assertFalse(speaker_hints_outstanding(rows, set()))
+        again = pending_jess_hint(rows, {4}, {"jess"})
+        self.assertEqual(again.sends, ())
+        self.assertEqual(again.quiet, ())
+
+    def test_a_found_local_check_is_quiet(self) -> None:
+        plan = pending_jess_hint([{"speaker": "jess", "location": 4}], set(), set())
+        self.assertEqual(plan.sends, ())
+        self.assertEqual(plan.quiet, ("jess",))
+
+    def test_an_unknown_place_is_not_gated_on_this_slot(self) -> None:
+        plan = pending_jess_hint(
+            [{"speaker": "jess", "location": 4242, "player": 2}],
+            set(),
+            set(),
+        )
+        self.assertEqual(
+            [(send.speaker, send.location, send.player) for send in plan.sends],
+            [("jess", 4242, 2)],
+        )
+        self.assertEqual(plan.quiet, ())
+
+    def test_bad_rows_are_skipped_and_the_first_good_row_wins(self) -> None:
+        rows = [
+            {"speaker": "jess", "location": True},
+            {"speaker": "jess", "location": -1},
+            {"speaker": "jess", "player": 2},
+            {"speaker": "lars_crypt", "location": 4},
+            {"speaker": "jess", "location": 4, "player": 0},
+            {"speaker": "jess", "location": 4, "player": True},
+            {"speaker": "jess", "location": 7},
+            {"speaker": "jess", "location": 8},
+        ]
+        plan = pending_jess_hint(rows, {7, 8}, set())
+        self.assertEqual([send.location for send in plan.sends], [7])
+        self.assertEqual(pending_jess_hint(None, {7}, set()).sends, ())
+        self.assertEqual(pending_jess_hint([{"speaker": "jess", "location": 4, "player": None}], {4}, set()).sends, ())
+
+    def test_npc_text_in_his_house_sends_once_control_returns(self) -> None:
+        latched, send = jess_talk_step(False, MAP_JESS_HOUSE, True, False)
+        self.assertEqual((latched, send), (True, False))
+        # The box stays up across watches.
+        self.assertEqual(jess_talk_step(latched, MAP_JESS_HOUSE, True, False), (True, False))
+        # An open box is not a send, even if a caller also says the watch is ready.
+        self.assertEqual(jess_talk_step(latched, MAP_JESS_HOUSE, True, True), (True, False))
+        self.assertEqual(jess_talk_step(latched, MAP_JESS_HOUSE, False, True), (False, True))
+
+    def test_leaving_the_house_drops_the_talk(self) -> None:
+        latched, send = jess_talk_step(False, MAP_JESS_HOUSE, True, False)
+        self.assertFalse(send)
+        # Map 242 is where the opened blue chest puts him, before control returns.
+        self.assertEqual(jess_talk_step(latched, 242, False, True), (False, False))
+        self.assertEqual(jess_talk_step(False, 242, True, False), (False, False))
+
+    def test_the_menu_and_an_idle_visit_do_not_latch(self) -> None:
+        # npc_text is the two NPC words. The save book is the menu word.
+        self.assertEqual(jess_talk_step(False, MAP_JESS_HOUSE, False, True), (False, False))
+        self.assertEqual(jess_talk_step(False, MAP_JESS_HOUSE, False, False), (False, False))
+        # Armed, and the box has closed, but gameplay is not ready yet.
+        self.assertEqual(jess_talk_step(True, MAP_JESS_HOUSE, False, False), (True, False))

@@ -22,7 +22,9 @@ sys.modules["alundra"] = _package
 from alundra.data import GAME_DATA, REQUIRED_STARTING_ITEMS
 from alundra.hints import (
     HintLocation,
+    SpeakerHint,
     _area_hint,
+    encode_speaker_hints,
     _minimal_blocking_checks,
     hintable_item_names,
     offworld_hint_copies,
@@ -34,6 +36,20 @@ from alundra.logic import LogicError, LogicSettings, build_graph
 _BOMB_CHEST = 4
 _LARS_CHEST = 195
 _NEARBY_GOAL = "naomi_shop"
+
+
+class SpeakerHintSlotTests(unittest.TestCase):
+    def test_slot_rows_omit_the_sentence(self) -> None:
+        local = SpeakerHint("jess", "Bomb can be found near Sanctuary", HintLocation(4))
+        away = SpeakerHint("lars_crypt", "Ruby Crest can be found in an unknown place", HintLocation(4242, 2))
+        self.assertEqual(
+            encode_speaker_hints((local, away)),
+            [
+                {"speaker": "jess", "location": 4},
+                {"speaker": "lars_crypt", "location": 4242, "player": 2},
+            ],
+        )
+        self.assertEqual(encode_speaker_hints(()), [])
 
 
 class HintDataTests(unittest.TestCase):

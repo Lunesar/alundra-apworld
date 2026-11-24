@@ -4,12 +4,15 @@ Archipelago ships the Lua connector (`data/lua/connector_bizhawk_generic.lua`).
 This module is the handler that connector talks to. It claims a PlayStation
 image, logs in to a room, reports locations listed in ``checks.py``, scouts
 the shop checks named there when you enter Naomi's, Lurvy's, or Merrick's,
-grants an item the server sends from another game, and sends the goal when
-the ending is requested.
+registers a speaker hint when that line's event bit is set, registers Jess's
+hint from NPC text in his house while this client is connected, grants an item
+the server sends from another game, and sends the goal when the ending is
+requested.
 """
 
 from __future__ import annotations
 
+import enum
 import logging
 import sys
 from typing import TYPE_CHECKING, ClassVar
@@ -24,13 +27,18 @@ from .checks import (
     EVENT_FLAGS,
     GOAL_PHASE,
     WATCHED_LOCATION_IDS,
+    SpeakerHintPlan,
     checked_locations,
     flag_read,
     game_beaten,
+    jess_talk_step,
     lurvy_repair_hint_locations,
     lurvy_repair_hints_enabled,
     names_for,
+    pending_jess_hint,
+    pending_speaker_hints,
     shop_hint_locations,
+    speaker_hints_outstanding,
 )
 from .placement import apworld_version, pinned_randomizer_version
 from .receive import READS, Hold, checks_ready, hold_message, parse_play_state, pending_ap_id, plan
@@ -56,6 +64,18 @@ _MAIN_RAM = "MainRAM"
 # Starting gear is already applied by the new-game patch.
 _ITEMS_FROM_OTHER_WORLDS = 0b001
 
+
+class CreateAsHint(enum.IntEnum):
+    """``LocationScouts`` field. The item reply is sent either way.
+
+    ``NO_HINT`` stores nothing. ``ONLY_NEW`` stores a hint and stays quiet
+    when the server already has it. Any other non-zero value stores the hint
+    and tells the room again. None of these spends hint points.
+    """
+
+    NO_HINT = 0
+    ONLY_NEW = 2
+
 # On 3.11 and newer the connector wraps a script error in ExceptionGroup.
 # A refused read has to return False so the watcher retries, same as a timeout.
 _READ_ERRORS: tuple[type[BaseException], ...] = (bizhawk.RequestFailedError, bizhawk.ConnectorError)
@@ -76,6 +96,13 @@ class AlundraClient(BizHawkClient):
         # broadcast the hint again only when the first packet never landed,
         # so a new login clears this and the next shop visit sends it.
         self._shop_hinted: set[int] = set()
+        # Speakers whose line was already handled this connection. Two rows
+        # can name one location, so this is the speaker id, not the location.
+        self._speaker_hinted: set[str] = set()
+        # NPC text was seen on map 260, and the box has not yet closed there.
+        # A connect clears it. Closing the client loses it, so the next
+        # session waits for another conversation.
+        self._jess_talk_seen = False
         # Previous watch's play state. A grant waits until two watches agree,
         # so a one-frame change during a load is not applied.
         self._stable = None
@@ -157,17 +184,28 @@ class AlundraClient(BizHawkClient):
         ctx.auth = self._slot.player
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        """Report checks, scout a shop, grant one remote item, and send the goal."""
+        """Report checks, scout a shop, register a spoken line, grant one item, and send the goal."""
         received = list(ctx.items_received)
-        watching = bool(ctx.missing_locations & WATCHED_LOCATION_IDS)
+        location_watch = bool(ctx.missing_locations & WATCHED_LOCATION_IDS)
+        slot_data = ctx.slot_data if isinstance(ctx.slot_data, dict) else {}
+        speaker_rows = slot_data.get("speaker_hints")
+        # An off-world line is not one of this slot's missing checks. Keep
+        # reading flags until every speaker row with a bit has been handled.
+        need_speakers = speaker_hints_outstanding(speaker_rows, self._speaker_hinted)
+        # Jess has no flag. A found local check is remembered here, and an
+        # open row keeps the play-state read alive on its own.
+        jess_plan = pending_jess_hint(speaker_rows, ctx.missing_locations, self._speaker_hinted)
+        if jess_plan.quiet:
+            self._speaker_hinted.update(jess_plan.quiet)
+        jess_hint_pending = bool(jess_plan.sends)
         # The ending word is not a location. Keep reading it after the last chest.
         send_goal = not ctx.finished_game
-        if not watching and not received and not send_goal:
+        if not location_watch and not need_speakers and not received and not send_goal and not jess_hint_pending:
             return
-        flag = flag_read() if watching else None
+        flag = flag_read() if location_watch or need_speakers else None
         # Checks use the same ready gate as a grant. The flag array is work
         # RAM, and it can hold bits until new-game setup clears it.
-        need_play = flag is not None or bool(received)
+        need_play = flag is not None or bool(received) or jess_hint_pending
         reads: list[tuple[int, int, str]] = []
         if send_goal:
             reads.append((GOAL_PHASE, 4, _MAIN_RAM))
@@ -196,12 +234,17 @@ class AlundraClient(BizHawkClient):
             play_bytes = read_bytes[cursor:cursor + len(READS)]
         if flag is not None and flag_bytes is not None and checks_ready(play_bytes):
             offset, _length = flag
-            sent = await ctx.check_locations(checked_locations(flag_bytes, offset - EVENT_FLAGS))
-            unreported = sent - self._reported
-            if unreported:
-                self._reported.update(unreported)
-                logger.info("Checked %s.", ", ".join(names_for(unreported)))
-            await self._hint_shops(ctx, flag_bytes, offset - EVENT_FLAGS, play_bytes)
+            origin = offset - EVENT_FLAGS
+            if location_watch:
+                sent = await ctx.check_locations(checked_locations(flag_bytes, origin))
+                unreported = sent - self._reported
+                if unreported:
+                    self._reported.update(unreported)
+                    logger.info("Checked %s.", ", ".join(names_for(unreported)))
+                await self._hint_shops(ctx, flag_bytes, origin, play_bytes)
+            if need_speakers:
+                await self._hint_speakers(ctx, flag_bytes, origin, speaker_rows)
+        await self._watch_jess(ctx, play_bytes, jess_hint_pending)
         if received:
             await self._receive(ctx, play_bytes, received)
 
@@ -228,9 +271,9 @@ class AlundraClient(BizHawkClient):
     ) -> None:
         """Scout the checks this shop still has.
 
-        ``create_as_hint`` 2 records the hint and does not spend hint points.
-        The server drops a repeat of a hint it already stored. This set stops
-        a second watch in the same visit from sending the packet again.
+        ``CreateAsHint.ONLY_NEW`` records the hint and does not spend hint
+        points. The server drops a repeat of a hint it already stored. This
+        set stops a second watch in the same visit from sending the packet again.
         """
         if not _can_send(ctx):
             return
@@ -258,12 +301,107 @@ class AlundraClient(BizHawkClient):
         await ctx.send_msgs([{
             "cmd": "LocationScouts",
             "locations": pending,
-            "create_as_hint": 2,
+            "create_as_hint": CreateAsHint.ONLY_NEW,
         }])
         if not _can_send(ctx):
             return
         self._shop_hinted.update(pending)
         logger.info("Hinted %s.", ", ".join(names_for(set(pending))))
+
+    async def _hint_speakers(
+        self,
+        ctx: "BizHawkClientContext",
+        flag_bytes: bytes,
+        origin: int,
+        rows: object,
+    ) -> None:
+        """Register the check a speaker just named.
+
+        A local check is ``LocationScouts`` with ``CreateAsHint.ONLY_NEW``.
+        An unknown-place check is ``CreateHints`` for the slot that holds it.
+        Neither spends hint points. One dropped packet leaves every send in
+        this watch unmarked, and the server ignores a hint it already stored.
+        """
+        hint_plan = pending_speaker_hints(
+            rows, flag_bytes, origin, ctx.missing_locations, self._speaker_hinted,
+        )
+        await self._send_speaker_hints(ctx, hint_plan)
+
+    async def _watch_jess(
+        self,
+        ctx: "BizHawkClientContext",
+        play_bytes: list[bytes],
+        jess_hint_pending: bool,
+    ) -> None:
+        """Latch NPC text in Jess's house, then send his row once control returns.
+
+        The text words are set while the box is up, and a ready watch is the
+        one where that box has closed. Seeing the box on map 260 arms the
+        send. Leaving the map clears the latch, so the warp after the blue
+        chest opens does not register on a later visit. The menu window does
+        not arm it. A dropped packet arms the latch again.
+        """
+        if len(play_bytes) != len(READS):
+            return
+        if any(len(data) != size for (_, size), data in zip(READS, play_bytes)):
+            return
+        state = parse_play_state(play_bytes)
+        new_latch, talk_ready = jess_talk_step(
+            self._jess_talk_seen,
+            state.loaded_map,
+            bool(state.text_window_a or state.text_window_b),
+            checks_ready(play_bytes),
+        )
+        self._jess_talk_seen = new_latch
+        if not jess_hint_pending or not talk_ready:
+            return
+        # Re-read the row. A check reported earlier in this watch may now be found.
+        slot_data = ctx.slot_data if isinstance(ctx.slot_data, dict) else {}
+        hint_plan = pending_jess_hint(
+            slot_data.get("speaker_hints"),
+            ctx.missing_locations,
+            self._speaker_hinted,
+        )
+        if not await self._send_speaker_hints(ctx, hint_plan):
+            self._jess_talk_seen = True
+
+    async def _send_speaker_hints(self, ctx: "BizHawkClientContext", hint_plan: SpeakerHintPlan) -> bool:
+        """Send one speaker plan. Quiet rows are remembered either way.
+
+        False means a packet was dropped before every sender was remembered,
+        so the caller can retry. Shops and the chimney use their own sender.
+        """
+        if hint_plan.quiet:
+            self._speaker_hinted.update(hint_plan.quiet)
+        if not hint_plan.sends:
+            return True
+        if not _can_send(ctx):
+            return False
+        local_ids = _unique_locations(send for send in hint_plan.sends if send.player is None)
+        remote = _remote_by_slot(send for send in hint_plan.sends if send.player is not None)
+        if local_ids:
+            await ctx.send_msgs([{
+                "cmd": "LocationScouts",
+                "locations": local_ids,
+                "create_as_hint": CreateAsHint.ONLY_NEW,
+            }])
+            if not _can_send(ctx):
+                return False
+        for player, locations in remote:
+            await ctx.send_msgs([{
+                "cmd": "CreateHints",
+                "player": player,
+                "locations": locations,
+            }])
+            if not _can_send(ctx):
+                return False
+        self._speaker_hinted.update(send.speaker for send in hint_plan.sends)
+        names = names_for(set(local_ids))
+        if names:
+            logger.info("Hinted %s.", ", ".join(names))
+        for player, _locations in remote:
+            logger.info("Hinted a check in slot %s.", player)
+        return True
 
     async def _receive(self, ctx: "BizHawkClientContext", read_bytes: list[bytes], received: list) -> None:
         """Grant the item at the saved count when this watch matches the last one.
@@ -336,9 +474,34 @@ class AlundraClient(BizHawkClient):
         # The saved count still says what this file has already been granted.
         self._reported.clear()
         self._shop_hinted.clear()
+        self._speaker_hinted.clear()
+        self._jess_talk_seen = False
         self._stable = None
         self._holds.clear()
         logger.info("Logged in as %s.", ctx.auth)
+
+
+def _unique_locations(sends) -> list[int]:
+    locations: list[int] = []
+    seen: set[int] = set()
+    for send in sends:
+        if send.location in seen:
+            continue
+        seen.add(send.location)
+        locations.append(send.location)
+    return locations
+
+
+def _remote_by_slot(sends) -> list[tuple[int, list[int]]]:
+    grouped: dict[int, list[int]] = {}
+    for send in sends:
+        # pending_speaker_hints only puts a player on an unknown-place row.
+        if send.player is None:
+            continue
+        locations = grouped.setdefault(send.player, [])
+        if send.location not in locations:
+            locations.append(send.location)
+    return [(player, grouped[player]) for player in sorted(grouped)]
 
 
 def _can_send(ctx: "BizHawkClientContext") -> bool:

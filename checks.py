@@ -134,6 +134,9 @@ def game_beaten(phase: bytes) -> bool:
 MAP_LURVY_SHOP = 398
 MAP_NAOMI_SHOP = 258
 MAP_MERRICK_SHOP = 134
+# Door variant of Jess's house. This is the copy he can be talked to in.
+# Map 242 is the spawn, and the blue chest warps there once it has been opened.
+MAP_JESS_HOUSE = 260
 
 # Slot-data value for Shop Hints. Anything else is treated as all.
 SHOP_HINT_ALL = "all"
@@ -230,3 +233,185 @@ def lurvy_repair_hint_locations(
     if not secret or handed_over or repair.location_id in skip:
         return []
     return [repair.location_id]
+
+
+# Line-played event codes. The client sends that speaker's slot-data row when
+# the bit is set. Jess is absent. His script has no safe byte for a flag, so
+# the client watches NPC text on map 260 while it is connected. See
+# pending_jess_hint and jess_talk_step.
+#
+# These five are already set by the retail script after the line, and nothing
+# clears them. 0x0372 is also Uma's chest. That chest opens in the same scene,
+# after the line. The other four are not item-source event codes.
+#   lars_crypt 0x015C, reptile_lair 0x0303, coastal_cave 0x06A1,
+#   magyscar 0x0372, great_tree 0x0645.
+#
+# PatchApplyHintText writes the other six. New game does not set them.
+#   nirudes_lair 0x0053, torla_mountain 0x0054, coal_mine 0x0055,
+#   ancient_shrine 0x0056, fairy_pond 0x0057, nava_keep 0x0059.
+SPEAKER_LINE_FLAGS: dict[str, int] = {
+    "lars_crypt": 0x015C,
+    "reptile_lair": 0x0303,
+    "nirudes_lair": 0x0053,
+    "coastal_cave": 0x06A1,
+    "torla_mountain": 0x0054,
+    "magyscar": 0x0372,
+    "coal_mine": 0x0055,
+    "ancient_shrine": 0x0056,
+    "fairy_pond": 0x0057,
+    "great_tree": 0x0645,
+    "nava_keep": 0x0059,
+}
+
+
+@dataclass(frozen=True)
+class SpeakerHintSend:
+    """One hint packet for a line that has been heard."""
+
+    speaker: str
+    location: int
+    player: int | None = None
+
+
+@dataclass(frozen=True)
+class SpeakerHintPlan:
+    """Packets still due, and speakers whose check is already found.
+
+    ``quiet`` is remembered without a packet. A local line whose check has
+    left the server's missing list has nothing to register.
+    """
+
+    sends: tuple[SpeakerHintSend, ...] = ()
+    quiet: tuple[str, ...] = ()
+
+
+def speaker_hints_outstanding(rows: object, sent: set[str]) -> bool:
+    """True when a row with a line bit has not been handled this connection.
+
+    Jess has no bit, so his row does not keep the flag read alive. The play
+    state read is what watches his house.
+    """
+    if not isinstance(rows, list):
+        return False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        speaker = row.get("speaker")
+        if isinstance(speaker, str) and speaker in SPEAKER_LINE_FLAGS and speaker not in sent:
+            return True
+    return False
+
+
+def _location_and_player(row: dict) -> tuple[int, int | None] | None:
+    location = row.get("location")
+    if isinstance(location, bool) or not isinstance(location, int) or location < 0:
+        return None
+    if "player" not in row:
+        return location, None
+    player = row.get("player")
+    if isinstance(player, bool) or not isinstance(player, int) or player < 1:
+        return None
+    return location, player
+
+
+def _speaker_row(row: object) -> tuple[str, int, int | None] | None:
+    if not isinstance(row, dict):
+        return None
+    speaker = row.get("speaker")
+    if not isinstance(speaker, str) or speaker not in SPEAKER_LINE_FLAGS:
+        return None
+    target = _location_and_player(row)
+    if target is None:
+        return None
+    location, player = target
+    return speaker, location, player
+
+
+def pending_speaker_hints(
+    rows: object,
+    flag_bytes: bytes,
+    origin: int,
+    missing: set[int] | frozenset[int],
+    sent: set[str],
+) -> SpeakerHintPlan:
+    """The lines whose bit is set and that this connection has not handled.
+
+    A local check is a packet only while it is still missing. An unknown-place
+    check is not gated on this slot's missing set. A bad row is skipped. A bit
+    outside ``flag_bytes`` is not handled, so a short read does not forget it.
+    """
+    if not isinstance(rows, list):
+        return SpeakerHintPlan()
+    sends: list[SpeakerHintSend] = []
+    quiet: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        parsed = _speaker_row(row)
+        if parsed is None:
+            continue
+        speaker, location, player = parsed
+        if speaker in sent or speaker in seen:
+            continue
+        heard = _flag_is_set(SPEAKER_LINE_FLAGS[speaker], flag_bytes, origin)
+        if heard is None or not heard:
+            continue
+        seen.add(speaker)
+        if player is None and location not in missing:
+            quiet.append(speaker)
+            continue
+        sends.append(SpeakerHintSend(speaker, location, player))
+    return SpeakerHintPlan(tuple(sends), tuple(quiet))
+
+
+def pending_jess_hint(
+    rows: object,
+    missing: set[int] | frozenset[int],
+    sent: set[str],
+) -> SpeakerHintPlan:
+    """The jess row this connection has not handled.
+
+    Jess has no line bit. The caller decides when his line has played. A
+    local check is a packet only while it is still missing, and a found one
+    is remembered with no packet. An unknown-place check is not gated on
+    this slot's missing set. The first valid row wins. A bad row is skipped.
+    """
+    if not isinstance(rows, list) or "jess" in sent:
+        return SpeakerHintPlan()
+    for row in rows:
+        if not isinstance(row, dict) or row.get("speaker") != "jess":
+            continue
+        target = _location_and_player(row)
+        if target is None:
+            continue
+        location, player = target
+        if player is None and location not in missing:
+            return SpeakerHintPlan((), ("jess",))
+        return SpeakerHintPlan((SpeakerHintSend("jess", location, player),), ())
+    return SpeakerHintPlan()
+
+
+def jess_talk_step(
+    latched: bool,
+    loaded_map: int,
+    npc_text: bool,
+    ready: bool,
+) -> tuple[bool, bool]:
+    """The latch after this watch, and whether his hint should be sent.
+
+    NPC text on map 260 arms the latch. The send waits until gameplay is
+    ready and the loaded map is still 260, which is the watch after the box
+    closes, and then the latch clears. An open box is not ready, so a second
+    watch of the same conversation keeps the latch. Any other map clears it.
+    The warp after the blue chest opens therefore does not send, and a later
+    visit needs a new conversation. The menu window is not NPC text.
+
+    The caller puts the latch back when the packet does not leave, so the
+    next ready watch retries.
+    """
+    if loaded_map != MAP_JESS_HOUSE:
+        return False, False
+    if npc_text:
+        return True, False
+    if latched and ready:
+        return False, True
+    return latched, False

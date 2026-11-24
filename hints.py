@@ -54,6 +54,23 @@ class SpeakerHint:
     check: HintLocation
 
 
+def encode_speaker_hints(rows: Sequence[SpeakerHint]) -> list[dict[str, str | int]]:
+    """Slot-data rows. The sentence stays in the placement file.
+
+    ``player`` is present only when the check is in another slot.
+    """
+    encoded: list[dict[str, str | int]] = []
+    for row in rows:
+        item: dict[str, str | int] = {
+            "speaker": row.speaker,
+            "location": row.check.location,
+        }
+        if row.check.player is not None:
+            item["player"] = row.check.player
+        encoded.append(item)
+    return encoded
+
+
 def offworld_hint_copies(
     copies: Iterable[tuple[str, int, int]],
 ) -> dict[str, tuple[HintLocation, ...]]:

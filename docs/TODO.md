@@ -24,13 +24,13 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
   Shop Hints is `all` or `next`, default `all`, and `fill_slot_data` sends it as `shop_hints`. A ready watch on map 398, 258, or 134 sends `LocationScouts` with `create_as_hint` 2 for the checks that shop still has. `all` sends every remaining one. `next` sends the first whose purchase bit is clear. Restocking shelves have no location id. The repaired Ancient Armor is separate. Hint Lurvy's Repair, default on, scouts id 269 when chimney bit `0x067F` is set and `0x0455` is still clear.
 
-- [ ] Report a location hint when the player reads one in the game.
+- [x] Report a location hint when the player reads one in the game.
 
-  The randomizer writes hint sentences into dialogue at patch time (`PatchApplyHintText`). The room never hears that the player read one. Archipelago hint points are not spent inside the game.
+  Generation rolls the twelve speakers in `pre_output` and caches the rows, so `fill_slot_data` and the placement file share one roll. Slot data `speaker_hints` is each spoken row as `speaker` and `location`, plus `player` when the line says the item is in an unknown place. The sentence stays in the placement file. The patcher stamps it and writes the line-played bits. Those bits are listed in `docs/client_memory.md`.
 
-  When the player reads a hint, send `LocationScouts` for those location ids with `create_as_hint` set to 2. That records a hint for the room and broadcasts it once. It does not spend hint points. Skip a location this client has already scouted. A non-zero `create_as_hint` stores a hint even after the location is checked.
+  A ready watch sends when that bit is set. A local check still in `missing_locations` is `LocationScouts` with `create_as_hint` 2. An unknown-place check is `CreateHints` for the other slot: `player` is that slot, and `locations` is their location id. Neither spends hint points. A local check that is already found is remembered and sends nothing. The remembered set is speaker ids, and a connect clears it. Shops and the chimney keep their own set.
 
-  The twelve speakers are Lars, Jeal, Miming, Vul, Wilda, Uma, Zazan in the Coal Mine, the Ancient Shrine priest, Stenia, Zazan in the Great Tree, Nava, and Jess. An item hint names one item and one place (`random_hint_for_item` picks one source). A region hint says that something useful lies in a region, or that nothing of interest does, and names no check. The dialogue string does not carry a location id. The patch has to store, for each speaker, the location ids that sentence refers to, where the client can read them when that dialogue is on screen. A region hint with no check sends nothing. The current sentences are region phrases, so registering one would name a chest the line does not. That generator is a separate change.
+  Jess has no safe line bit. His sentence is still stamped, and his row is in slot data. While the client is connected, NPC text on map 260 latches that row, and a later ready watch still on map 260 sends it. Closing the client clears the latch. The chest's no-key refusal in that room counts. Opening the chest warps to map 242 before control returns, and the latch clears with the map.
 
 ## Randomizer enhancements
 

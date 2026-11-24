@@ -11,7 +11,9 @@ records that item as an object. A one-time shop shelf also records the gilder
 it charges. This slot's own items stay in-game item ids. The file is always
 the Multiworld format, recording this slot's player name, the apworld
 version, and the seed. It also records the spoken speaker hints: one speaker,
-the sentence, and the one check that sentence registers.
+the sentence, and the one check that sentence registers. Slot data carries
+the speaker and that check, without the sentence. The client registers the
+hint when the line's event bit is set.
 """
 
 from __future__ import annotations
@@ -49,7 +51,13 @@ from .data import (
     visited_item_name,
 )
 from .items import AlundraItem, AlundraLocation, classification_for
-from .hints import HintLocation, offworld_hint_copies, roll_hints
+from .hints import (
+    HintLocation,
+    SpeakerHint,
+    encode_speaker_hints,
+    offworld_hint_copies,
+    roll_hints,
+)
 from .logic import (
     END_NODE,
     LogicError,
@@ -317,6 +325,9 @@ class AlundraWorld(World):
                 continue
             if GAME_DATA.source_by_id[source_id].forbid_precious:
                 location.address = None
+        # fill_slot_data and generate_output run together after this returns.
+        # The roll has to happen once, here, or the two calls draw different lines.
+        self._speaker_hints()
 
     def _accessibility_spheres(self) -> dict[int, int]:
         """1-based sphere of each of this slot's sendable checks.
@@ -341,7 +352,7 @@ class AlundraWorld(World):
                 spheres[source_id] = number
         return spheres
 
-    def generate_output(self, output_directory: str) -> None:
+    def _placements(self) -> dict[int, int | OutsidePlacement]:
         # pre_output has already cleared the shelves that are not checks, so
         # this sweep matches the sphere list written for the room.
         spheres = self._accessibility_spheres()
@@ -368,12 +379,14 @@ class AlundraWorld(World):
                     "A check that refuses a precious item also refuses a remote item."
                 )
             placements[source_id] = self._outside_placement(item, source, spheres.get(source_id))
+        return placements
 
-        # Hint Generation
+    def _roll_speaker_hints(self) -> tuple[SpeakerHint, ...]:
+        placements = self._placements()
         inventory = recorded_starting_inventory(self._precollected_names())
         local_names, remote_progression = hint_search_placements(placements)
         try:
-            hint_rows = roll_hints(
+            return roll_hints(
                 self.logic_graph,
                 GAME_DATA,
                 self.random,
@@ -386,6 +399,19 @@ class AlundraWorld(World):
             )
         except LogicError as error:
             raise RuntimeError(str(error)) from error
+
+    def _speaker_hints(self) -> tuple[SpeakerHint, ...]:
+        # An empty tuple is a finished roll: nobody had a line. None is unset.
+        cached = getattr(self, "_speaker_hint_cache", None)
+        if cached is not None:
+            return cached
+        rows = self._roll_speaker_hints()
+        self._speaker_hint_cache = rows
+        return rows
+
+    def generate_output(self, output_directory: str) -> None:
+        placements = self._placements()
+        hint_rows = self._speaker_hints()
 
         # Multiworld format
         document = build_placement_document(
@@ -421,6 +447,7 @@ class AlundraWorld(World):
             "item_id_base": ITEM_ID_BASE,
             "shop_hints": self.options.shop_hints.current_key,
             "hint_lurvy_repair": bool(self.options.hint_lurvy_repair.value),
+            "speaker_hints": encode_speaker_hints(self._speaker_hints()),
         }
 
     def write_spoiler(self, spoiler_handle) -> None:

@@ -6,15 +6,17 @@ image, logs in to a room, reports locations listed in ``checks.py``, scouts
 the shop checks named there when you enter Naomi's, Lurvy's, or Merrick's,
 registers a speaker hint when that line's event bit is set, registers Jess's
 hint from NPC text in his house while this client is connected, grants an item
-the server sends from another game, and sends the goal when the ending is
-requested.
+the server sends from another game, sends the goal when the ending is
+requested, and warns when the disc callbacks are stuck on the file-read pair.
 """
 
 from __future__ import annotations
 
 import enum
 import logging
+import struct
 import sys
+import time
 from typing import TYPE_CHECKING, ClassVar
 
 import worlds._bizhawk as bizhawk
@@ -41,8 +43,27 @@ from .checks import (
     speaker_hints_outstanding,
 )
 from .placement import apworld_version, pinned_randomizer_version
-from .receive import READS, Hold, checks_ready, hold_message, parse_play_state, pending_ap_id, plan
+from .receive import (
+    LOADED_MAP,
+    READS,
+    Hold,
+    checks_ready,
+    hold_message,
+    parse_play_state,
+    pending_ap_id,
+    plan,
+)
 from .slot import SLOT_MAIN_RAM, SLOT_SIZE, parse_slot_block, room_seed_matches
+from .sound_player import (
+    LIVE_CALLBACKS,
+    SAVED_CALLBACKS,
+    CLEARED_MESSAGE,
+    SCREEN_MESSAGE,
+    next_sound_warning,
+    sound_log_line,
+    sound_player_healthy,
+    sound_player_stuck,
+)
 
 logger = logging.getLogger("Client")
 
@@ -115,6 +136,9 @@ class AlundraClient(BizHawkClient):
         self._unknown_randomizer: str | None = None
         self._client_version: str | None = None
         self._randomizer_version: str | None = None
+        # Wall time of the last stuck-sound warning. None after the music
+        # pair returns, so the next episode warns on its first watch.
+        self._sound_warned_at: float | None = None
 
     async def validate_rom(self, ctx: "BizHawkClientContext") -> bool:
         """Claim the image when it is this client's patched executable.
@@ -184,7 +208,11 @@ class AlundraClient(BizHawkClient):
         ctx.auth = self._slot.player
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        """Report checks, scout a shop, register a spoken line, grant one item, and send the goal."""
+        """Report checks, scout a shop, register a spoken line, grant one item, and send the goal.
+
+        Also warns when the disc callbacks are stuck on the file-read pair.
+        """
+        await self._watch_sound_player(ctx)
         received = list(ctx.items_received)
         location_watch = bool(ctx.missing_locations & WATCHED_LOCATION_IDS)
         slot_data = ctx.slot_data if isinstance(ctx.slot_data, dict) else {}
@@ -478,7 +506,48 @@ class AlundraClient(BizHawkClient):
         self._jess_talk_seen = False
         self._stable = None
         self._holds.clear()
+        self._sound_warned_at = None
         logger.info("Logged in as %s.", ctx.auth)
+
+    async def _watch_sound_player(self, ctx: "BizHawkClientContext") -> None:
+        """Warn while a disc restore would put the file-read callback back.
+
+        The log and the on-screen line repeat once a minute. A normal read,
+        which keeps the music pair in the saved slots, stays quiet.
+        """
+        try:
+            live, saved, map_bytes = await bizhawk.read(
+                ctx.bizhawk_ctx,
+                [
+                    (LIVE_CALLBACKS, 8, _MAIN_RAM),
+                    (SAVED_CALLBACKS, 8, _MAIN_RAM),
+                    (LOADED_MAP, 4, _MAIN_RAM),
+                ],
+            )
+        except _READ_ERRORS:
+            return
+        if len(live) != 8 or len(saved) != 8 or len(map_bytes) != 4:
+            return
+        stuck = sound_player_stuck(live, saved)
+        healthy = sound_player_healthy(live)
+        warned_at = self._sound_warned_at
+        warn, self._sound_warned_at = next_sound_warning(
+            stuck, healthy, warned_at, time.monotonic()
+        )
+        if healthy and warned_at is not None:
+            logger.info("%s", CLEARED_MESSAGE)
+            try:
+                await bizhawk.display_message(ctx.bizhawk_ctx, CLEARED_MESSAGE)
+            except _READ_ERRORS:
+                return
+        if not warn:
+            return
+        map_id = struct.unpack("<I", map_bytes)[0]
+        logger.info("%s", sound_log_line(map_id, live, saved))
+        try:
+            await bizhawk.display_message(ctx.bizhawk_ctx, SCREEN_MESSAGE)
+        except _READ_ERRORS:
+            return
 
 
 def _unique_locations(sends) -> list[int]:

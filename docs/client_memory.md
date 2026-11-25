@@ -350,6 +350,12 @@ The `0xBB` handler is `0x800425B8`. It reads the loaded map id at `0x801F5358`. 
 
 The BizHawk client reads MainRAM `0x1F11F8` until the goal is sent. The little-endian value 9 sends `StatusUpdate` with `CLIENT_GOAL` and logs `Goal completed.`. A read while the client is not logged in does not count. The word is still 9 on the next watch, until `END.EXE` replaces the image. After the credits the word is gone, so a reconnect does not see it again.
 
+## Disc callbacks
+
+libcd's live callbacks are MainRAM `0xCA13C` (cb0) and `0xCA140` (cb1). A file read saves the previous pair at `0xCA478` and `0xCA47C`, installs the file-read callback `0x8008C8B8` in cb1 with cb0 cleared, and copies the saved pair back when the read finishes. The music pair is cb0 `0x80089F20` and cb1 `0x80089F48`.
+
+The client warns when both pairs are `0` and `0x8008C8B8`. A normal read leaves the music pair in the saved slots, so it does not warn. The client log repeats every 60 seconds until the live pair is the music pair again, and it names the map and both pairs. The on-screen line repeats on that same clock and tells the player to load a memory-card save from the title screen. When the live pair is the music pair again, the log and the screen say the sound player is no longer stuck.
+
 ## Current map, and when not to grant
 
 | What | Address | Size | Notes |

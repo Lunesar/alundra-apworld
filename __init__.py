@@ -144,7 +144,7 @@ class AlundraWebWorld(WebWorld):
             "starting_gold": 0,
             "allow_spoiler_log": True,
             "restocking_shop_items": "full_variety",
-            "shop_hints": "all",
+            "shop_hints": "next",
             "hint_lurvy_repair": True,
             "start_inventory": {
                 "Dagger": 1,

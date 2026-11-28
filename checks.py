@@ -415,3 +415,73 @@ def jess_talk_step(
     if latched and ready:
         return False, True
     return latched, False
+
+
+# Riverside bar map 394. PatchApplyHintText sets one bit when that prize
+# sign's text has been dismissed. The two ids are that game's checks, chest
+# then second reward. 0x0058 stays unused.
+@dataclass(frozen=True)
+class CasinoSign:
+    name: str
+    event_code: int
+    locations: tuple[int, int]
+
+
+CASINO_SIGNS: tuple[CasinoSign, ...] = (
+    CasinoSign("slime_smash", 0x005A, (60, 61)),
+    CasinoSign("hit_your_mark", 0x005B, (58, 59)),
+    CasinoSign("wheel_of_fortune", 0x005C, (56, 57)),
+)
+
+
+@dataclass(frozen=True)
+class CasinoHintPlan:
+    """Locations to scout, signs with nothing left to say, and signs in the packet.
+
+    ``quiet`` is remembered with no packet. ``signs`` is remembered only after
+    the packet leaves, so a dropped send tries the same sign again.
+    """
+
+    locations: tuple[int, ...] = ()
+    quiet: tuple[str, ...] = ()
+    signs: tuple[str, ...] = ()
+
+
+def casino_hints_outstanding(missing: set[int] | frozenset[int], handled: set[str]) -> bool:
+    """True when a sign still has a missing prize and this connection has not handled it."""
+    for sign in CASINO_SIGNS:
+        if sign.name in handled:
+            continue
+        if any(location in missing for location in sign.locations):
+            return True
+    return False
+
+
+def pending_casino_hints(
+    flag_bytes: bytes,
+    origin: int,
+    missing: set[int] | frozenset[int],
+    handled: set[str],
+) -> CasinoHintPlan:
+    """The prize pairs whose sign bit is set and that this connection has not handled.
+
+    A location is a packet only while it is still missing. A sign whose prizes
+    are both found is quiet. A bit outside ``flag_bytes`` is not handled, so a
+    short read does not forget the sign. Chest id, then the second reward.
+    """
+    locations: list[int] = []
+    quiet: list[str] = []
+    signs: list[str] = []
+    for sign in CASINO_SIGNS:
+        if sign.name in handled:
+            continue
+        heard = _flag_is_set(sign.event_code, flag_bytes, origin)
+        if heard is None or not heard:
+            continue
+        still_missing = [location for location in sign.locations if location in missing]
+        if not still_missing:
+            quiet.append(sign.name)
+            continue
+        locations.extend(still_missing)
+        signs.append(sign.name)
+    return CasinoHintPlan(tuple(locations), tuple(quiet), tuple(signs))

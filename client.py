@@ -5,7 +5,8 @@ This module is the handler that connector talks to. It claims a PlayStation
 image, logs in to a room, reports locations listed in ``checks.py``, scouts
 the shop checks named there when you enter Naomi's, Lurvy's, or Merrick's,
 registers a speaker hint when that line's event bit is set, registers Jess's
-hint from NPC text in his house while this client is connected, grants an item
+hint from NPC text in his house while this client is connected, registers the
+two prizes on a Riverside bar sign when that sign's bit is set, grants an item
 the server sends from another game, sends the goal when the ending is
 requested, and warns when the disc callbacks are stuck on the file-read pair.
 """
@@ -17,6 +18,7 @@ import logging
 import struct
 import sys
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
 import worlds._bizhawk as bizhawk
@@ -30,6 +32,7 @@ from .checks import (
     GOAL_PHASE,
     WATCHED_LOCATION_IDS,
     SpeakerHintPlan,
+    casino_hints_outstanding,
     checked_locations,
     flag_read,
     game_beaten,
@@ -37,6 +40,7 @@ from .checks import (
     lurvy_repair_hint_locations,
     lurvy_repair_hints_enabled,
     names_for,
+    pending_casino_hints,
     pending_jess_hint,
     pending_speaker_hints,
     shop_hint_locations,
@@ -104,6 +108,45 @@ if sys.version_info >= (3, 11):
     _READ_ERRORS = (*_READ_ERRORS, ExceptionGroup)
 
 
+@dataclass(frozen=True)
+class _Pending:
+    location_watch: bool
+    speaker_rows: object
+    speaker_hint_pending: bool
+    jess_hint_pending: bool
+    casino_hint_pending: bool
+    send_goal: bool
+    received: list
+
+    def idle(self) -> bool:
+        return not (
+            self.location_watch
+            or self.speaker_hint_pending
+            or self.received
+            or self.send_goal
+            or self.jess_hint_pending
+            or self.casino_hint_pending
+        )
+
+    def reads_flags(self) -> bool:
+        return self.location_watch or self.speaker_hint_pending or self.casino_hint_pending
+
+
+def _watcher_reads(
+    send_goal: bool, flag: tuple[int, int] | None, need_play: bool,
+) -> list[tuple[int, int, str]]:
+    # Goal word, then the flag window, then the play-state block.
+    reads: list[tuple[int, int, str]] = []
+    if send_goal:
+        reads.append((GOAL_PHASE, 4, _MAIN_RAM))
+    if flag is not None:
+        offset, length = flag
+        reads.append((offset, length, _MAIN_RAM))
+    if need_play:
+        reads.extend((address, size, _MAIN_RAM) for address, size in READS)
+    return reads
+
+
 class AlundraClient(BizHawkClient):
     system: ClassVar[str] = "PSX"
     game: ClassVar[str] = "Alundra"
@@ -120,6 +163,9 @@ class AlundraClient(BizHawkClient):
         # Speakers whose line was already handled this connection. Two rows
         # can name one location, so this is the speaker id, not the location.
         self._speaker_hinted: set[str] = set()
+        # Prize signs whose bit was handled this connection. The bit stays on
+        # in the save, so a new login looks again.
+        self._casino_hinted: set[str] = set()
         # NPC text was seen on map 260, and the box has not yet closed there.
         # A connect clears it. Closing the client loses it, so the next
         # session waits for another conversation.
@@ -208,73 +254,93 @@ class AlundraClient(BizHawkClient):
         ctx.auth = self._slot.player
 
     async def game_watcher(self, ctx: "BizHawkClientContext") -> None:
-        """Report checks, scout a shop, register a spoken line, grant one item, and send the goal.
+        """Report checks, scout a shop, register a spoken line or prize sign, grant one item, and send the goal.
 
         Also warns when the disc callbacks are stuck on the file-read pair.
         """
         await self._watch_sound_player(ctx)
-        received = list(ctx.items_received)
-        location_watch = bool(ctx.missing_locations & WATCHED_LOCATION_IDS)
-        slot_data = ctx.slot_data if isinstance(ctx.slot_data, dict) else {}
-        speaker_rows = slot_data.get("speaker_hints")
-        # An off-world line is not one of this slot's missing checks. Keep
-        # reading flags until every speaker row with a bit has been handled.
-        need_speakers = speaker_hints_outstanding(speaker_rows, self._speaker_hinted)
-        # Jess has no flag. A found local check is remembered here, and an
-        # open row keeps the play-state read alive on its own.
-        jess_plan = pending_jess_hint(speaker_rows, ctx.missing_locations, self._speaker_hinted)
-        if jess_plan.quiet:
-            self._speaker_hinted.update(jess_plan.quiet)
-        jess_hint_pending = bool(jess_plan.sends)
-        # The ending word is not a location. Keep reading it after the last chest.
-        send_goal = not ctx.finished_game
-        if not location_watch and not need_speakers and not received and not send_goal and not jess_hint_pending:
+        pending = self._pending(ctx)
+        if pending.idle():
             return
-        flag = flag_read() if location_watch or need_speakers else None
+
         # Checks use the same ready gate as a grant. The flag array is work
         # RAM, and it can hold bits until new-game setup clears it.
-        need_play = flag is not None or bool(received) or jess_hint_pending
-        reads: list[tuple[int, int, str]] = []
-        if send_goal:
-            reads.append((GOAL_PHASE, 4, _MAIN_RAM))
-        if flag is not None:
-            offset, length = flag
-            reads.append((offset, length, _MAIN_RAM))
-        if need_play:
-            reads.extend((address, size, _MAIN_RAM) for address, size in READS)
+        flag = flag_read() if pending.reads_flags() else None
+        need_play = flag is not None or bool(pending.received) or pending.jess_hint_pending
+        reads = _watcher_reads(pending.send_goal, flag, need_play)
         if not reads:
             return
+
         try:
             read_bytes = await bizhawk.read(ctx.bizhawk_ctx, reads)
         except _READ_ERRORS:
             return
         cursor = 0
-        if send_goal:
+
+        if pending.send_goal:
             if game_beaten(read_bytes[cursor]):
                 await self._complete_goal(ctx)
             cursor += 1
+
         flag_bytes = None
         if flag is not None:
             flag_bytes = read_bytes[cursor]
             cursor += 1
+
         play_bytes: list[bytes] = []
         if need_play:
             play_bytes = read_bytes[cursor:cursor + len(READS)]
-        if flag is not None and flag_bytes is not None and checks_ready(play_bytes):
-            offset, _length = flag
-            origin = offset - EVENT_FLAGS
-            if location_watch:
-                sent = await ctx.check_locations(checked_locations(flag_bytes, origin))
-                unreported = sent - self._reported
-                if unreported:
-                    self._reported.update(unreported)
-                    logger.info("Checked %s.", ", ".join(names_for(unreported)))
-                await self._hint_shops(ctx, flag_bytes, origin, play_bytes)
-            if need_speakers:
-                await self._hint_speakers(ctx, flag_bytes, origin, speaker_rows)
-        await self._watch_jess(ctx, play_bytes, jess_hint_pending)
-        if received:
-            await self._receive(ctx, play_bytes, received)
+        await self._report_ready_flags(ctx, pending, flag, flag_bytes, play_bytes)
+        await self._watch_jess(ctx, play_bytes, pending.jess_hint_pending)
+        if pending.received:
+            await self._receive(ctx, play_bytes, pending.received)
+
+    def _pending(self, ctx: "BizHawkClientContext") -> _Pending:
+        slot_data = ctx.slot_data if isinstance(ctx.slot_data, dict) else {}
+        speaker_rows = slot_data.get("speaker_hints")
+        # An off-world line is not one of this slot's missing checks. Keep
+        # reading flags until every speaker row with a bit has been handled.
+        speaker_hint_pending = speaker_hints_outstanding(speaker_rows, self._speaker_hinted)
+        # Jess has no flag. A found local check is remembered here, and an
+        # open row keeps the play-state read alive on its own.
+        jess_hint = pending_jess_hint(speaker_rows, ctx.missing_locations, self._speaker_hinted)
+        if jess_hint.quiet:
+            self._speaker_hinted.update(jess_hint.quiet)
+        # A sign whose prizes are already found does not keep the flag read
+        # alive. The ending word is not a location.
+        return _Pending(
+            location_watch=bool(ctx.missing_locations & WATCHED_LOCATION_IDS),
+            speaker_rows=speaker_rows,
+            speaker_hint_pending=speaker_hint_pending,
+            jess_hint_pending=bool(jess_hint.sends),
+            casino_hint_pending=casino_hints_outstanding(ctx.missing_locations, self._casino_hinted),
+            send_goal=not ctx.finished_game,
+            received=list(ctx.items_received),
+        )
+
+    async def _report_ready_flags(
+        self,
+        ctx: "BizHawkClientContext",
+        pending: _Pending,
+        flag: tuple[int, int] | None,
+        flag_bytes: bytes | None,
+        play_bytes: list[bytes],
+    ) -> None:
+        if flag is None or flag_bytes is None or not checks_ready(play_bytes):
+            return
+        offset, _length = flag
+        origin = offset - EVENT_FLAGS
+        if pending.location_watch:
+            sent = await ctx.check_locations(checked_locations(flag_bytes, origin))
+            unreported = sent - self._reported
+            if unreported:
+                self._reported.update(unreported)
+                logger.info("Checked %s.", ", ".join(names_for(unreported)))
+            await self._hint_shops(ctx, flag_bytes, origin, play_bytes)
+        if pending.speaker_hint_pending:
+            await self._hint_speakers(ctx, flag_bytes, origin, pending.speaker_rows)
+        if pending.casino_hint_pending:
+            await self._hint_casino(ctx, flag_bytes, origin)
 
     async def _complete_goal(self, ctx: "BizHawkClientContext") -> None:
         """Tell the room the ending was requested.
@@ -354,6 +420,35 @@ class AlundraClient(BizHawkClient):
             rows, flag_bytes, origin, ctx.missing_locations, self._speaker_hinted,
         )
         await self._send_speaker_hints(ctx, hint_plan)
+
+    async def _hint_casino(
+        self,
+        ctx: "BizHawkClientContext",
+        flag_bytes: bytes,
+        origin: int,
+    ) -> None:
+        """Scout the two prizes named on a sign whose text has been dismissed.
+
+        ``CreateAsHint.ONLY_NEW`` records the hint and does not spend hint
+        points. A found prize is left out. A quiet sign is remembered even
+        when a later packet in this watch does not leave.
+        """
+        plan = pending_casino_hints(
+            flag_bytes, origin, ctx.missing_locations, self._casino_hinted,
+        )
+        if plan.quiet:
+            self._casino_hinted.update(plan.quiet)
+        if not plan.locations or not _can_send(ctx):
+            return
+        await ctx.send_msgs([{
+            "cmd": "LocationScouts",
+            "locations": list(plan.locations),
+            "create_as_hint": CreateAsHint.ONLY_NEW,
+        }])
+        if not _can_send(ctx):
+            return
+        self._casino_hinted.update(plan.signs)
+        logger.info("Hinted %s.", ", ".join(names_for(set(plan.locations))))
 
     async def _watch_jess(
         self,
@@ -503,6 +598,7 @@ class AlundraClient(BizHawkClient):
         self._reported.clear()
         self._shop_hinted.clear()
         self._speaker_hinted.clear()
+        self._casino_hinted.clear()
         self._jess_talk_seen = False
         self._stable = None
         self._holds.clear()

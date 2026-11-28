@@ -22,7 +22,7 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
 
 - [x] Report a shop check when the player enters Naomi's, Lurvy's, or Merrick's.
 
-  Shop Hints is `all` or `next`, default `all`, and `fill_slot_data` sends it as `shop_hints`. A ready watch on map 398, 258, or 134 sends `LocationScouts` with `create_as_hint` 2 for the checks that shop still has. `all` sends every remaining one. `next` sends the first whose purchase bit is clear. Restocking shelves have no location id. The repaired Ancient Armor is separate. Hint Lurvy's Repair, default on, scouts id 269 when chimney bit `0x067F` is set and `0x0455` is still clear.
+  Shop Hints is `all` or `next`, default `next`, and `fill_slot_data` sends it as `shop_hints`. A ready watch on map 398, 258, or 134 sends `LocationScouts` with `create_as_hint` 2 for the checks that shop still has. `all` sends every remaining one. `next` sends the first whose purchase bit is clear. Restocking shelves have no location id. The repaired Ancient Armor is separate. Hint Lurvy's Repair, default on, scouts id 269 when chimney bit `0x067F` is set and `0x0455` is still clear.
 
 - [x] Report a location hint when the player reads one in the game.
 
@@ -31,6 +31,10 @@ Player pages are `docs/setup_en.md` and `docs/en_Alundra.md`. The address map is
   A ready watch sends when that bit is set. A local check still in `missing_locations` is `LocationScouts` with `create_as_hint` 2. An unknown-place check is `CreateHints` for the other slot: `player` is that slot, and `locations` is their location id. Neither spends hint points. A local check that is already found is remembered and sends nothing. The remembered set is speaker ids, and a connect clears it. Shops and the chimney keep their own set.
 
   Jess has no safe line bit. His sentence is still stamped, and his row is in slot data. While the client is connected, NPC text on map 260 latches that row, and a later ready watch still on map 260 sends it. Closing the client clears the latch. The chest's no-key refusal in that room counts. Opening the chest warps to map 242 before control returns, and the latch clears with the map.
+
+- [x] Report the two prizes named on a Riverside Casino sign.
+
+  Map 394 B[2]. Dismissing a prize sign sets `0x005A` (Slime Smash, locations 60 then 61), `0x005B` (Hit Your Mark, 58 then 59), or `0x005C` (Wheel of Fortune, 56 then 57). A ready watch sends `LocationScouts` with `create_as_hint` 2 for the prizes still missing. A sign whose prizes are both found sends nothing.
 
 ## Randomizer enhancements
 

@@ -20,6 +20,7 @@ _package.__spec__.submodule_search_locations = [str(_world)]
 sys.modules["alundra"] = _package
 
 from alundra.checks import (
+    CASINO_SIGNS,
     EVENT_FLAGS,
     GOAL_ENDING,
     GOAL_PHASE,
@@ -30,17 +31,21 @@ from alundra.checks import (
     SHOP_CHECKS,
     SHOP_HINT_ALL,
     SHOP_HINT_NEXT,
+    CasinoHintPlan,
     LocationCheck,
+    casino_hints_outstanding,
     checked_locations,
     flag_read,
     game_beaten,
     LURVY_SECRET,
     MAP_JESS_HOUSE,
     SPEAKER_LINE_FLAGS,
+    WATCHED_LOCATION_IDS,
     jess_talk_step,
     lurvy_repair_hint_locations,
     lurvy_repair_hints_enabled,
     names_for,
+    pending_casino_hints,
     pending_jess_hint,
     pending_speaker_hints,
     shop_hint_locations,
@@ -590,3 +595,131 @@ class JessTalkTests(unittest.TestCase):
         self.assertEqual(jess_talk_step(False, MAP_JESS_HOUSE, False, False), (False, False))
         # Armed, and the box has closed, but gameplay is not ready yet.
         self.assertEqual(jess_talk_step(True, MAP_JESS_HOUSE, False, False), (True, False))
+
+
+# Chest id, then the second reward. These event codes are the prize flags.
+# The sign bits are separate, so reading a sign does not report the chest.
+_CASINO_PRIZES = {
+    "slime_smash": ((60, 1569, "Riverside Casino: 'Slime Smash' chest"),
+                    (61, 1570, "Riverside Casino: 'Slime Smash' second reward")),
+    "hit_your_mark": ((58, 1557, "Riverside Casino: 'Hit Your Mark' chest"),
+                      (59, 1558, "Riverside Casino: 'Hit Your Mark' second reward")),
+    "wheel_of_fortune": ((56, 1563, "Riverside Casino: 'Wheel of Fortune' chest"),
+                         (57, 1564, "Riverside Casino: 'Wheel of Fortune' second reward")),
+}
+
+
+def _casino_missing() -> set[int]:
+    return {location_id for pairs in _CASINO_PRIZES.values() for location_id, _code, _name in pairs}
+
+
+class CasinoSignHintTests(unittest.TestCase):
+    def test_sign_bits_are_inside_the_flag_read(self) -> None:
+        read = flag_read()
+        self.assertIsNotNone(read)
+        assert read is not None
+        address, length = read
+        start = address - EVENT_FLAGS
+        buf = _purchase_flags(set())
+        for sign in CASINO_SIGNS:
+            self.assertLess(sign.event_code, 2048, sign.name)
+            index = (sign.event_code >> 3) - start
+            self.assertGreaterEqual(index, 0, sign.name)
+            self.assertLess(index, length, sign.name)
+            buf = _with_bit(buf, sign.event_code, True)
+        # The client passes this slice, not a buffer that starts at byte 0.
+        window = buf[start:start + length]
+        plan = pending_casino_hints(window, start, _casino_missing(), set())
+        self.assertEqual(plan.locations, (60, 61, 58, 59, 56, 57))
+        self.assertEqual(
+            plan.signs,
+            ("slime_smash", "hit_your_mark", "wheel_of_fortune"),
+        )
+        self.assertEqual(plan.quiet, ())
+
+    def test_sign_codes_are_not_the_prize_flags(self) -> None:
+        self.assertEqual([sign.name for sign in CASINO_SIGNS], list(_CASINO_PRIZES))
+        sign_codes = {sign.event_code for sign in CASINO_SIGNS}
+        self.assertEqual(sign_codes, {0x005A, 0x005B, 0x005C})
+        # 0x0058 stays unused. The speaker bits stop at Nava, 0x0059.
+        self.assertNotIn(0x0058, sign_codes)
+        self.assertTrue(sign_codes.isdisjoint(SPEAKER_LINE_FLAGS.values()))
+        watched = {check.event_code for check in LOCATION_CHECKS}
+        self.assertTrue(sign_codes.isdisjoint(watched))
+        self.assertNotIn(0x0058, watched)
+        for sign in CASINO_SIGNS:
+            self.assertEqual(
+                sign.locations,
+                tuple(location_id for location_id, _code, _name in _CASINO_PRIZES[sign.name]),
+            )
+            for location_id, event_code, name in _CASINO_PRIZES[sign.name]:
+                source = GAME_DATA.source_by_id[location_id]
+                self.assertEqual(source.name, name)
+                self.assertEqual(source.event_code, event_code)
+                self.assertNotEqual(source.event_code, sign.event_code)
+                self.assertIn(location_id, WATCHED_LOCATION_IDS)
+        # Setting only the sign bits does not report a prize.
+        flags = _purchase_flags(set())
+        for sign in CASINO_SIGNS:
+            flags = _with_bit(flags, sign.event_code, True)
+        self.assertEqual(checked_locations(flags, 0), [])
+
+    def test_a_clear_sign_sends_nothing(self) -> None:
+        missing = _casino_missing()
+        plan = pending_casino_hints(_purchase_flags(set()), 0, missing, set())
+        self.assertEqual(plan, CasinoHintPlan())
+        self.assertTrue(casino_hints_outstanding(missing, set()))
+
+    def test_a_read_sign_names_both_prizes(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), 0x005A, True)
+        plan = pending_casino_hints(heard, 0, _casino_missing(), set())
+        self.assertEqual(plan.locations, (60, 61))
+        self.assertEqual(plan.signs, ("slime_smash",))
+        self.assertEqual(plan.quiet, ())
+
+    def test_a_found_prize_is_left_out(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), 0x005B, True)
+        missing = _casino_missing() - {58}
+        plan = pending_casino_hints(heard, 0, missing, set())
+        self.assertEqual(plan.locations, (59,))
+        self.assertEqual(plan.signs, ("hit_your_mark",))
+        self.assertEqual(plan.quiet, ())
+        self.assertTrue(casino_hints_outstanding(missing, set()))
+
+    def test_a_sign_with_nothing_left_is_quiet(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), 0x005C, True)
+        missing = _casino_missing() - {56, 57}
+        plan = pending_casino_hints(heard, 0, missing, set())
+        self.assertEqual(plan.locations, ())
+        self.assertEqual(plan.quiet, ("wheel_of_fortune",))
+        self.assertEqual(plan.signs, ())
+        # The other two signs still have prizes to name.
+        self.assertTrue(casino_hints_outstanding(missing, set()))
+        self.assertFalse(
+            casino_hints_outstanding(missing, {"slime_smash", "hit_your_mark"}),
+        )
+
+    def test_a_handled_sign_sends_nothing(self) -> None:
+        heard = _with_bit(_purchase_flags(set()), 0x005A, True)
+        missing = _casino_missing()
+        plan = pending_casino_hints(heard, 0, missing, {"slime_smash"})
+        self.assertEqual(plan, CasinoHintPlan())
+        self.assertTrue(casino_hints_outstanding(missing, {"slime_smash"}))
+        self.assertFalse(casino_hints_outstanding(missing, {sign.name for sign in CASINO_SIGNS}))
+        self.assertFalse(casino_hints_outstanding(set(), set()))
+
+    def test_a_short_flag_read_does_not_forget_the_sign(self) -> None:
+        missing = _casino_missing()
+        plan = pending_casino_hints(b"\x00", 0, missing, set())
+        self.assertEqual(plan, CasinoHintPlan())
+        self.assertTrue(casino_hints_outstanding(missing, set()))
+
+    def test_two_signs_share_one_list(self) -> None:
+        # Hit Your Mark stays clear, so its pair is left out. Order is the
+        # sign order: chest, then second reward.
+        flags = _with_bit(_purchase_flags(set()), 0x005A, True)
+        flags = _with_bit(flags, 0x005C, True)
+        plan = pending_casino_hints(flags, 0, _casino_missing(), set())
+        self.assertEqual(plan.locations, (60, 61, 56, 57))
+        self.assertEqual(plan.signs, ("slime_smash", "wheel_of_fortune"))
+        self.assertEqual(plan.quiet, ())

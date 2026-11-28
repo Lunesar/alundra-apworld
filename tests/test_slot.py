@@ -60,8 +60,8 @@ class SlotBlockTests(unittest.TestCase):
         unterminated[0x2C:0x2C + 64] = b"A" * 64
         self.assertIsNone(parse_slot_block(bytes(unterminated)))
 
-    def test_world_pins_randomizer_1_3_7(self) -> None:
-        self.assertEqual(pinned_randomizer_version(), "1.3.7")
+    def test_world_pins_randomizer_1_3_8(self) -> None:
+        self.assertEqual(pinned_randomizer_version(), "1.3.8")
 
     def test_room_seed_must_be_the_embedded_seed(self) -> None:
         self.assertTrue(room_seed_matches(7, {"seed": 7}))

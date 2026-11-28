@@ -330,5 +330,148 @@ class WorldSearchTests(unittest.TestCase):
             search_world(graph, GAME_DATA, {}, forbid_items=("Not An Item",))
 
 
+# Item 73, the lower chest in the left A3 ruins. The elevated ledge and the
+# ground below it, overworld_a3_left_behind_merman can only be exited to the
+# river_network, and that exit requires the Merman Boots. Dropping in without
+# them softlocks the player, so the one-way drop requires them.
+_A3_LEFT = "overworld_a3_left"
+_A3_LEDGE = "overworld_a3_left_elevated_behind_merman"
+_A3_BEHIND_MERMAN = "overworld_a3_left_behind_merman"
+_A3_LOWER_CHEST = 73
+
+
+class A3LowerChestTest(unittest.TestCase):
+    def test_chest_is_on_the_ledge_between_the_drops(self) -> None:
+        self.assertEqual(GAME_DATA.source_by_id[_A3_LOWER_CHEST].node_id, _A3_LEDGE)
+        self.assertEqual(GAME_DATA.nodes[_A3_LEDGE].region_name, GAME_DATA.nodes[_A3_LEFT].region_name)
+
+        graph = build_graph(GAME_DATA, SPLIT)
+        onto_ledge = _only(graph, _A3_LEFT, _A3_LEDGE)
+        to_lower_ground = _only(graph, _A3_LEDGE, _A3_BEHIND_MERMAN)
+        self.assertEqual(onto_ledge.requirement.items, (("Merman Boots", 1),))
+        self.assertEqual(to_lower_ground.requirement.items, ())
+        self.assertEqual(_edges(graph, _A3_LEDGE, _A3_LEFT), [])
+        self.assertEqual(_edges(graph, _A3_BEHIND_MERMAN, _A3_LEDGE), [])
+        self.assertEqual(_edges(graph, _A3_LEFT, _A3_BEHIND_MERMAN), [])
+
+    def test_boots_alone_reach_the_lower_ground_and_not_the_chest(self) -> None:
+        graph = build_graph(GAME_DATA, SPLIT)
+        # The river lands on the lower ground. That ground is below the chest.
+        from_the_river = explore(graph, Counter({"Merman Boots": 1}))
+        self.assertIn(_A3_BEHIND_MERMAN, from_the_river)
+        self.assertNotIn(_A3_LEDGE, from_the_river)
+        self.assertNotIn(_A3_LEFT, from_the_river)
+
+        # overworld_a3_left stays open without the boots. The drop onto the chest
+        # stays closed, because the river is the only way back out.
+        inventory = full_inventory(graph)
+        self.assertIn(_A3_LEDGE, explore(graph, inventory))
+        inventory["Merman Boots"] = 0
+        reached = explore(graph, inventory)
+        self.assertIn(_A3_LEFT, reached)
+        self.assertNotIn(_A3_LEDGE, reached)
+
+
+# Two tree stumps divide the ground north of Nava's cabin. The left pocket
+# opens onto overworld_a4_right, and the Iron Flail opens it onto
+# overworld_b3_megalith. The middle pocket holds item 50, and the Iron Flail
+# opens it onto overworld_b3_elevated. Each pocket meets overworld_b4 through
+# its own stump, so the chest and the elevated exit both require a Bomb.
+_B4 = "overworld_b4"
+_B4_LEFT = "overworld_b4_behind_bomb_left"
+_B4_MIDDLE = "overworld_b4_behind_bomb_middle"
+_A4_RIGHT = "overworld_a4_right"
+_B3_MEGALITH = "overworld_b3_megalith"
+_B3_ELEVATED = "overworld_b3_elevated"
+_B4_STUMP_CHEST = 50
+_B3_ELEVATED_CHEST = 53
+_LITERAL = LogicSettings(progressive_items=False)
+
+
+class B4StumpSplitTest(unittest.TestCase):
+    def test_the_pockets_meet_b4_through_separate_stumps(self) -> None:
+        self.assertEqual(GAME_DATA.source_by_id[_B4_STUMP_CHEST].node_id, _B4_MIDDLE)
+        self.assertEqual(GAME_DATA.source_by_id[_B3_ELEVATED_CHEST].node_id, _B3_ELEVATED)
+        self.assertNotIn("overworld_b4_behind_bomb", GAME_DATA.nodes)
+        region = GAME_DATA.nodes[_B4].region_name
+        self.assertEqual(GAME_DATA.nodes[_B4_LEFT].region_name, region)
+        self.assertEqual(GAME_DATA.nodes[_B4_MIDDLE].region_name, region)
+
+        graph = build_graph(GAME_DATA, _LITERAL)
+        bomb = (("Bomb", 1),)
+        flail = (("Iron Flail", 1),)
+        self.assertEqual(_only(graph, _B4, _B4_LEFT).requirement.items, bomb)
+        self.assertEqual(_only(graph, _B4_LEFT, _B4).requirement.items, bomb)
+        self.assertEqual(_only(graph, _B4, _B4_MIDDLE).requirement.items, bomb)
+        self.assertEqual(_only(graph, _B4_MIDDLE, _B4).requirement.items, bomb)
+        self.assertEqual(_only(graph, _B4_LEFT, _A4_RIGHT).requirement.items, ())
+        self.assertEqual(_only(graph, _A4_RIGHT, _B4_LEFT).requirement.items, ())
+        self.assertEqual(_only(graph, _B4_LEFT, _B3_MEGALITH).requirement.items, flail)
+        self.assertEqual(_only(graph, _B3_MEGALITH, _B4_LEFT).requirement.items, flail)
+        self.assertEqual(_only(graph, _B4_MIDDLE, _B3_ELEVATED).requirement.items, flail)
+        self.assertEqual(_only(graph, _B3_ELEVATED, _B4_MIDDLE).requirement.items, flail)
+        for origin, destination in (
+            (_B4_LEFT, _B4_MIDDLE),
+            (_B4_MIDDLE, _B4_LEFT),
+            (_B4_MIDDLE, _A4_RIGHT),
+            (_A4_RIGHT, _B4_MIDDLE),
+            (_B4_MIDDLE, _B3_MEGALITH),
+            (_B3_MEGALITH, _B4_MIDDLE),
+            (_B4_LEFT, _B3_ELEVATED),
+            (_B3_ELEVATED, _B4_LEFT),
+        ):
+            self.assertEqual(_edges(graph, origin, destination), [])
+
+    def test_fire_wand_flail_and_boots_reach_the_megalith_and_miss_the_chests(self) -> None:
+        graph = build_graph(GAME_DATA, _LITERAL)
+        reached = explore(graph, Counter({
+            "Fire Wand": 1,
+            "Iron Flail": 1,
+            "Merman Boots": 1,
+        }))
+        self.assertIn(_A4_RIGHT, reached)
+        self.assertIn(_B4_LEFT, reached)
+        self.assertIn(_B3_MEGALITH, reached)
+        self.assertNotIn(_B4_MIDDLE, reached)
+        self.assertNotIn(_B3_ELEVATED, reached)
+
+    def test_bomb_opens_the_chest_and_flail_opens_the_elevated_exit(self) -> None:
+        graph = build_graph(GAME_DATA, _LITERAL)
+        with_bomb = explore(graph, Counter({"Bomb": 1}))
+        self.assertIn(_B4, with_bomb)
+        self.assertIn(_B4_LEFT, with_bomb)
+        self.assertIn(_B4_MIDDLE, with_bomb)
+        self.assertIn(_A4_RIGHT, with_bomb)
+        self.assertNotIn(_B3_ELEVATED, with_bomb)
+        self.assertNotIn(_B3_MEGALITH, with_bomb)
+
+        with_both = explore(graph, Counter({"Bomb": 1, "Iron Flail": 1}))
+        self.assertIn(_B4_MIDDLE, with_both)
+        self.assertIn(_B3_ELEVATED, with_both)
+        self.assertIn(_B3_MEGALITH, with_both)
+
+        # The left pocket and the megalith stay open while both stumps are intact.
+        without_bomb = full_inventory(graph)
+        without_bomb["Bomb"] = 0
+        reached = explore(graph, without_bomb)
+        self.assertIn(_B4_LEFT, reached)
+        self.assertIn(_A4_RIGHT, reached)
+        self.assertIn(_B3_MEGALITH, reached)
+        self.assertNotIn(_B4_MIDDLE, reached)
+        self.assertNotIn(_B3_ELEVATED, reached)
+
+        without_flail = full_inventory(graph)
+        without_flail["Iron Flail"] = 0
+        without_flail["Steel Flail"] = 0
+        reached = explore(graph, without_flail)
+        self.assertIn(_B4_MIDDLE, reached)
+        self.assertIn(_B4_LEFT, reached)
+        self.assertNotIn(_B3_ELEVATED, reached)
+        self.assertNotIn(_B3_MEGALITH, reached)
+
+        self.assertIn(_B4_MIDDLE, explore(graph, full_inventory(graph)))
+        self.assertIn(_B3_ELEVATED, explore(graph, full_inventory(graph)))
+
+
 if __name__ == "__main__":
     unittest.main()
